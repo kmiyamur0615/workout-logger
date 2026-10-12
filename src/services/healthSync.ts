@@ -61,7 +61,10 @@ export const HealthSyncService = {
   // 有酸素運動用ショートカット呼び出しURLの生成
   buildCardioShortcutUrl(log: CardioLog, shortcutName: string = 'CardioLoggerSync'): string {
     const endedAt = new Date(log.endedAt);
-    const startedAt = new Date(endedAt.getTime() - log.durationMinutes * 60000);
+    const durationNum = Number(log.durationMinutes) || 0;
+    const distanceNum = Number(log.distanceKm) || 0;
+    const caloriesNum = Number(log.calories) || 0;
+    const startedAt = new Date(endedAt.getTime() - durationNum * 60000);
 
     const payload = {
       workoutCategory: "cardio",
@@ -69,9 +72,23 @@ export const HealthSyncService = {
       cardioTypeName: log.cardioTypeName,
       startDate: startedAt.toISOString(),
       endDate: endedAt.toISOString(),
-      durationMinutes: log.durationMinutes,
-      distanceKm: log.distanceKm,
-      calories: log.calories,
+      // 数値フィールド（表記ゆれ・日本語対応）
+      durationMinutes: durationNum,
+      duration: durationNum,
+      minutes: durationNum,
+      時間: durationNum,
+      分: durationNum,
+
+      distanceKm: distanceNum,
+      distance: distanceNum,
+      km: distanceNum,
+      距離: distanceNum,
+
+      calories: caloriesNum,
+      calorie: caloriesNum,
+      kcal: caloriesNum,
+      カロリー: caloriesNum,
+
       note: log.note || "",
     };
 
