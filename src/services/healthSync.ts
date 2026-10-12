@@ -72,6 +72,9 @@ export const HealthSyncService = {
       cardioTypeName: log.cardioTypeName,
       startDate: startedAt.toISOString(),
       endDate: endedAt.toISOString(),
+      開始日: startedAt.toISOString(),
+      開始日時: startedAt.toISOString(),
+      start: startedAt.toISOString(),
       // 数値フィールド（表記ゆれ・日本語対応）
       durationMinutes: durationNum,
       duration: durationNum,
