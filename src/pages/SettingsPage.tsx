@@ -1,0 +1,548 @@
+import React, { useState } from 'react';
+import { 
+  Settings, 
+  Database, 
+  Download, 
+  Check, 
+  RefreshCw, 
+  User, 
+  Activity, 
+  Plus, 
+  Trash2, 
+  ArrowDownToLine, 
+  Smartphone,
+  Calendar,
+  Dumbbell,
+  Edit3
+} from 'lucide-react';
+import { AppSettings, CardioType, RoutineMenu, WeekdaySchedule, Exercise, DayOfWeek } from '../types';
+import { StorageService } from '../services/storage';
+
+interface SettingsPageProps {
+  settings: AppSettings;
+  cardioTypes: CardioType[];
+  routineMenus: RoutineMenu[];
+  schedule: WeekdaySchedule[];
+  exercises: Exercise[];
+  onSaveSettings: (settings: AppSettings) => void;
+  onAddCardioType: (type: CardioType) => void;
+  onDeleteCardioType: (typeId: string) => void;
+  onUpdateSchedule: (newSchedule: WeekdaySchedule[]) => void;
+  onSaveMenu: (menu: RoutineMenu) => void;
+  onDeleteMenu: (menuId: string) => void;
+  onSyncGAS: () => Promise<void>;
+  isSyncing: boolean;
+}
+
+export const SettingsPage: React.FC<SettingsPageProps> = ({
+  settings,
+  cardioTypes,
+  routineMenus,
+  schedule,
+  exercises,
+  onSaveSettings,
+  onAddCardioType,
+  onDeleteCardioType,
+  onUpdateSchedule,
+  onSaveMenu,
+  onDeleteMenu,
+  onSyncGAS,
+  isSyncing,
+}) => {
+  const [height, setHeight] = useState<string>(settings.profile?.heightCm?.toString() || '172');
+  const [weight, setWeight] = useState<string>(settings.profile?.weightKg?.toString() || '68');
+  const [gasUrl, setGasUrl] = useState(settings.gasWebAppUrl);
+  const [shortcutName, setShortcutName] = useState(settings.appleShortcutName);
+  const [isSaved, setIsSaved] = useState(false);
+
+  // 有酸素種別追加
+  const [newTypeName, setNewTypeName] = useState('');
+  const [newTypeMets, setNewTypeMets] = useState('7.0');
+
+  // メニュー編集モーダル状態
+  const [editingMenu, setEditingMenu] = useState<RoutineMenu | null>(null);
+  const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
+
+  const weekdays: { day: DayOfWeek; name: string }[] = [
+    { day: 1, name: '月曜日' },
+    { day: 2, name: '火曜日' },
+    { day: 3, name: '水曜日' },
+    { day: 4, name: '木曜日' },
+    { day: 5, name: '金曜日' },
+    { day: 6, name: '土曜日' },
+    { day: 0, name: '日曜日' },
+  ];
+
+  const handleSaveAll = () => {
+    const updated: AppSettings = {
+      ...settings,
+      profile: {
+        heightCm: parseFloat(height) || 170,
+        weightKg: parseFloat(weight) || 65,
+        weightUpdatedAt: settings.profile?.weightUpdatedAt,
+      },
+      gasWebAppUrl: gasUrl.trim(),
+      appleShortcutName: shortcutName.trim() || 'WorkoutLoggerSync',
+    };
+    onSaveSettings(updated);
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 2000);
+  };
+
+  const handleFetchWeightFromHealth = () => {
+    const currentOrigin = window.location.origin + window.location.pathname;
+    const shortcutCmd = `GetWeightFromHealth`;
+    const targetUrl = `shortcuts://run-shortcut?name=${encodeURIComponent(shortcutCmd)}&input=text&text=${encodeURIComponent(currentOrigin)}`;
+    window.location.href = targetUrl;
+  };
+
+  const handleChangeDayMenu = (day: DayOfWeek, menuId: string) => {
+    const updated = schedule.map(s => {
+      if (s.dayOfWeek === day) {
+        return { ...s, menuId: menuId === 'none' ? null : menuId };
+      }
+      return s;
+    });
+    onUpdateSchedule(updated);
+  };
+
+  const handleOpenNewMenu = () => {
+    setEditingMenu({
+      id: `menu-${Date.now()}`,
+      name: '',
+      targetParts: '',
+      sortOrder: routineMenus.length + 1,
+      exercises: []
+    });
+    setIsMenuModalOpen(true);
+  };
+
+  const handleOpenEditMenu = (menu: RoutineMenu) => {
+    setEditingMenu({ ...menu });
+    setIsMenuModalOpen(true);
+  };
+
+  const handleSaveMenuModal = () => {
+    if (!editingMenu || !editingMenu.name.trim()) return;
+    onSaveMenu(editingMenu);
+    setIsMenuModalOpen(false);
+    setEditingMenu(null);
+  };
+
+  const handleAddExerciseToEditingMenu = (exerciseId: string) => {
+    if (!editingMenu) return;
+    setEditingMenu({
+      ...editingMenu,
+      exercises: [
+        ...editingMenu.exercises,
+        { exerciseId, targetSets: 3, targetReps: 10 }
+      ]
+    });
+  };
+
+  const handleRemoveExerciseFromEditingMenu = (idx: number) => {
+    if (!editingMenu) return;
+    const updated = [...editingMenu.exercises];
+    updated.splice(idx, 1);
+    setEditingMenu({ ...editingMenu, exercises: updated });
+  };
+
+  const handleCreateNewCardioType = () => {
+    if (!newTypeName.trim()) return;
+    const type: CardioType = {
+      id: `cardio-custom-${Date.now()}`,
+      name: newTypeName.trim(),
+      defaultMets: parseFloat(newTypeMets) || 6.0,
+      isCustom: true,
+    };
+    onAddCardioType(type);
+    setNewTypeName('');
+  };
+
+  const handleExportData = () => {
+    const data = {
+      bodyParts: StorageService.getBodyParts(),
+      exercises: StorageService.getExercises(),
+      routineMenus: StorageService.getRoutineMenus(),
+      schedule: StorageService.getSchedule(),
+      pastSessions: StorageService.getPastSessions(),
+      cardioTypes: StorageService.getCardioTypes(),
+      cardioLogs: StorageService.getCardioLogs(),
+      settings: StorageService.getSettings(),
+      exportedAt: new Date().toISOString()
+    };
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `workout-logger-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="pb-28 px-4 pt-3 max-w-lg mx-auto space-y-5 animate-in fade-in duration-150">
+      <div className="flex items-center gap-2 mb-1 px-1">
+        <Settings className="w-5 h-5 text-slate-300" />
+        <h2 className="text-base font-bold text-white tracking-tight">設定 ＆ メニュー管理</h2>
+      </div>
+
+      {/* 1. 曜日別デフォルトメニュー設定 */}
+      <div className="bg-dark-850 border border-dark-800 rounded-3xl p-5 shadow-lg space-y-3">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-brand-neon" />
+          <h3 className="text-sm font-bold text-white">曜日別デフォルトメニュー</h3>
+        </div>
+        <p className="text-[11px] text-slate-400">
+          曜日ごとにデフォルトで実施するメニューを割り当てます。
+        </p>
+
+        <div className="space-y-1.5">
+          {weekdays.map(({ day, name }) => {
+            const currentSched = schedule.find(s => s.dayOfWeek === day);
+            const currentVal = currentSched?.menuId || 'none';
+
+            return (
+              <div key={day} className="flex items-center justify-between p-2 rounded-xl bg-dark-900/60 border border-dark-800 text-xs">
+                <span className="font-bold text-slate-200 w-16">{name}</span>
+                <select
+                  value={currentVal}
+                  onChange={(e) => handleChangeDayMenu(day, e.target.value)}
+                  className="bg-dark-800 border border-dark-700 text-white rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:border-brand-neon max-w-[180px] truncate"
+                >
+                  <option value="none">オフ (休養日)</option>
+                  {routineMenus.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 2. メニューテンプレート一覧・編集 */}
+      <div className="bg-dark-850 border border-dark-800 rounded-3xl p-5 shadow-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Dumbbell className="w-4 h-4 text-brand-neon" />
+            <h3 className="text-sm font-bold text-white">メニューテンプレート</h3>
+          </div>
+          <button
+            onClick={handleOpenNewMenu}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-neon text-dark-950 text-xs font-bold active:scale-95 shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>新規作成</span>
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {routineMenus.map((menu) => (
+            <div key={menu.id} className="p-3 rounded-2xl bg-dark-900/60 border border-dark-800 flex items-center justify-between">
+              <div>
+                <div className="font-bold text-white text-xs">{menu.name}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">{menu.targetParts} · {menu.exercises.length}種目</div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => handleOpenEditMenu(menu)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-dark-800"
+                  title="編集"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => onDeleteMenu(menu.id)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-dark-800"
+                  title="削除"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 3. 身体データ (体重・身長) */}
+      <div className="bg-dark-850 border border-dark-800 rounded-3xl p-5 shadow-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-amber-400" />
+            <h3 className="text-sm font-bold text-white">身体データ (体重・身長)</h3>
+          </div>
+          {settings.profile?.weightUpdatedAt && (
+            <span className="text-[10px] text-slate-400">
+              更新: {new Date(settings.profile.weightUpdatedAt).toLocaleDateString('ja-JP')}
+            </span>
+          )}
+        </div>
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          有酸素運動時の正確な消費カロリー計算に使用されます。
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+              身長 (cm)
+            </label>
+            <input
+              type="number"
+              step="0.5"
+              value={height}
+              onChange={(e) => setHeight(e.target.value)}
+              placeholder="172"
+              className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-neon font-mono font-bold"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+              体重 (kg)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              placeholder="68.0"
+              className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-neon font-mono font-bold"
+            />
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleFetchWeightFromHealth}
+          className="w-full py-2.5 px-3 rounded-xl bg-dark-800 hover:bg-dark-750 active:scale-98 text-xs font-semibold text-amber-400 border border-amber-500/30 transition-all flex items-center justify-center gap-1.5 shadow-sm"
+        >
+          <ArrowDownToLine className="w-4 h-4" />
+          <span>Appleヘルスケアから最新体重を取得</span>
+        </button>
+      </div>
+
+      {/* 4. 有酸素運動の種別管理 */}
+      <div className="bg-dark-850 border border-dark-800 rounded-3xl p-5 shadow-lg space-y-3">
+        <div className="flex items-center gap-2">
+          <Activity className="w-4 h-4 text-amber-400" />
+          <h3 className="text-sm font-bold text-white">有酸素運動の種別管理</h3>
+        </div>
+
+        <div className="space-y-1.5">
+          {cardioTypes.map((type) => (
+            <div key={type.id} className="flex items-center justify-between p-2 rounded-xl bg-dark-900/60 border border-dark-800 text-xs">
+              <span className="font-bold text-slate-200">{type.name}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-400 font-mono">基準METs: {type.defaultMets}</span>
+                {type.isCustom && (
+                  <button
+                    onClick={() => onDeleteCardioType(type.id)}
+                    className="text-slate-500 hover:text-red-400 p-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="pt-2 border-t border-dark-800 flex items-center gap-2">
+          <input
+            type="text"
+            value={newTypeName}
+            onChange={(e) => setNewTypeName(e.target.value)}
+            placeholder="種目名 (例: 水泳)"
+            className="flex-1 bg-dark-800 border border-dark-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-neon"
+          />
+          <input
+            type="number"
+            step="0.1"
+            value={newTypeMets}
+            onChange={(e) => setNewTypeMets(e.target.value)}
+            placeholder="METs"
+            className="w-16 bg-dark-800 border border-dark-700 rounded-lg px-2 py-1.5 text-xs text-white font-mono"
+          />
+          <button
+            type="button"
+            onClick={handleCreateNewCardioType}
+            className="p-1.5 rounded-lg bg-dark-800 hover:bg-dark-750 text-brand-neon border border-dark-700"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* 5. Googleスプレッドシート & ヘルスケア書き込みショートカット */}
+      <div className="bg-dark-850 border border-dark-800 rounded-3xl p-5 shadow-lg space-y-3">
+        <div className="flex items-center gap-2">
+          <Database className="w-4 h-4 text-brand-neon" />
+          <h3 className="text-sm font-bold text-white">Googleスプレッドシート連携</h3>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+            GAS Web App URL
+          </label>
+          <input
+            type="url"
+            value={gasUrl}
+            onChange={(e) => setGasUrl(e.target.value)}
+            placeholder="https://script.google.com/macros/s/.../exec"
+            className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-neon font-mono"
+          />
+        </div>
+
+        <button
+          type="button"
+          disabled={isSyncing || !gasUrl}
+          onClick={onSyncGAS}
+          className="w-full py-2 px-3 rounded-xl bg-dark-800 hover:bg-dark-750 active:scale-98 text-xs font-semibold text-slate-200 border border-dark-700 transition-all flex items-center justify-center gap-1.5"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-brand-neon' : ''}`} />
+          <span>スプレッドシートから最新マスタを取得</span>
+        </button>
+
+        <div className="pt-2 border-t border-dark-800">
+          <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
+            <Smartphone className="w-3.5 h-3.5 text-brand-neon" />
+            <span>ヘルスケア書き込みショートカット名</span>
+          </label>
+          <input
+            type="text"
+            value={shortcutName}
+            onChange={(e) => setShortcutName(e.target.value)}
+            placeholder="WorkoutLoggerSync"
+            className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-neon font-mono"
+          />
+        </div>
+      </div>
+
+      {/* 設定保存ボタン */}
+      <button
+        type="button"
+        onClick={handleSaveAll}
+        className="w-full py-4 rounded-2xl bg-brand-neon hover:bg-green-400 active:scale-98 text-dark-950 font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-xl shadow-brand-neon/25"
+      >
+        <Check className="w-4 h-4 stroke-[3]" />
+        <span>{isSaved ? '設定を保存しました！' : '設定をすべて保存する'}</span>
+      </button>
+
+      {/* バックアップ */}
+      <div className="bg-dark-850 border border-dark-800 rounded-3xl p-5 shadow-lg space-y-2">
+        <h3 className="text-xs font-bold text-slate-300">データバックアップ</h3>
+        <button
+          type="button"
+          onClick={handleExportData}
+          className="w-full py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 active:scale-98 text-xs font-semibold text-slate-200 border border-dark-700 transition-all flex items-center justify-center gap-1.5"
+        >
+          <Download className="w-3.5 h-3.5 text-brand-neon" />
+          <span>全データをJSONでエクスポート</span>
+        </button>
+      </div>
+
+      {/* メニュー編集モーダル */}
+      {isMenuModalOpen && editingMenu && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-dark-900 border border-dark-700 w-full max-w-sm rounded-3xl p-5 shadow-2xl max-h-[85vh] flex flex-col">
+            <h3 className="font-bold text-white text-base mb-3 pb-2 border-b border-dark-800">
+              メニューを編集
+            </h3>
+
+            <div className="space-y-3 mb-4 overflow-y-auto flex-1 pr-1">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  メニュー名
+                </label>
+                <input
+                  type="text"
+                  value={editingMenu.name}
+                  onChange={(e) => setEditingMenu({ ...editingMenu, name: e.target.value })}
+                  placeholder="例: Push Day A"
+                  className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-neon"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  対象部位 / 説明
+                </label>
+                <input
+                  type="text"
+                  value={editingMenu.targetParts}
+                  onChange={(e) => setEditingMenu({ ...editingMenu, targetParts: e.target.value })}
+                  placeholder="例: 胸・肩・三頭"
+                  className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-neon"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  登録種目 ({editingMenu.exercises.length})
+                </label>
+                <div className="space-y-1.5 mb-2">
+                  {editingMenu.exercises.map((item, idx) => {
+                    const ex = exercises.find(e => e.id === item.exerciseId);
+                    return (
+                      <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-dark-800 border border-dark-700 text-xs">
+                        <span className="font-semibold text-white truncate max-w-[150px]">
+                          {ex?.name || '種目'}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {item.targetSets}s × {item.targetReps}r
+                          </span>
+                          <button
+                            onClick={() => handleRemoveExerciseFromEditingMenu(idx)}
+                            className="text-slate-400 hover:text-red-400 p-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <select
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleAddExerciseToEditingMenu(e.target.value);
+                      e.target.value = '';
+                    }
+                  }}
+                  defaultValue=""
+                  className="w-full bg-dark-800 border border-dashed border-dark-600 rounded-xl px-3 py-2 text-xs text-brand-neon focus:outline-none"
+                >
+                  <option value="" disabled>+ 種目を追加する</option>
+                  {exercises.map(e => (
+                    <option key={e.id} value={e.id}>{e.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-dark-800">
+              <button
+                type="button"
+                onClick={() => setIsMenuModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-dark-800 text-slate-300 text-xs font-semibold"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveMenuModal}
+                className="flex-1 py-2.5 rounded-xl bg-brand-neon text-dark-950 text-xs font-bold shadow-md shadow-brand-neon/20"
+              >
+                保存する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
