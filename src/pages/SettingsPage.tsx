@@ -53,6 +53,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [weight, setWeight] = useState<string>(settings.profile?.weightKg?.toString() || '68');
   const [gasUrl, setGasUrl] = useState(settings.gasWebAppUrl);
   const [shortcutName, setShortcutName] = useState(settings.appleShortcutName);
+  const [cardioShortcutName, setCardioShortcutName] = useState(settings.cardioShortcutName || 'CardioLoggerSync');
   const [isSaved, setIsSaved] = useState(false);
 
   // 有酸素種別追加
@@ -83,6 +84,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       },
       gasWebAppUrl: gasUrl.trim(),
       appleShortcutName: shortcutName.trim() || 'WorkoutLoggerSync',
+      cardioShortcutName: cardioShortcutName.trim() || 'CardioLoggerSync',
     };
     onSaveSettings(updated);
     setIsSaved(true);
@@ -405,18 +407,34 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           <span>スプレッドシートから最新マスタを取得</span>
         </button>
 
-        <div className="pt-2 border-t border-dark-800">
-          <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
-            <Smartphone className="w-3.5 h-3.5 text-brand-neon" />
-            <span>ヘルスケア書き込みショートカット名</span>
-          </label>
-          <input
-            type="text"
-            value={shortcutName}
-            onChange={(e) => setShortcutName(e.target.value)}
-            placeholder="WorkoutLoggerSync"
-            className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-neon font-mono"
-          />
+        <div className="pt-2 border-t border-dark-800 space-y-2.5">
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
+              <Smartphone className="w-3.5 h-3.5 text-brand-neon" />
+              <span>筋トレ書き込みショートカット名</span>
+            </label>
+            <input
+              type="text"
+              value={shortcutName}
+              onChange={(e) => setShortcutName(e.target.value)}
+              placeholder="WorkoutLoggerSync"
+              className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-neon font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
+              <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+              <span>有酸素書き込みショートカット名</span>
+            </label>
+            <input
+              type="text"
+              value={cardioShortcutName}
+              onChange={(e) => setCardioShortcutName(e.target.value)}
+              placeholder="CardioLoggerSync"
+              className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-neon font-mono"
+            />
+          </div>
         </div>
       </div>
 

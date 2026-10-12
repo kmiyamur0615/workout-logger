@@ -127,6 +127,7 @@ export interface AppSettings {
   profile: UserProfile;
   gasWebAppUrl: string;
   appleShortcutName: string;
+  cardioShortcutName?: string;
   weightUnit: 'kg' | 'lb';
   hapticsEnabled: boolean;
   autoSyncGAS: boolean;

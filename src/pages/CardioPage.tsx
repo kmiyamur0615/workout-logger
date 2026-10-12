@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Activity, Flame, Plus, Check, Calendar, Trash2 } from 'lucide-react';
+import { Activity, Flame, Plus, Check, Calendar, Trash2, Smartphone } from 'lucide-react';
 import { CardioType, CardioLog, UserProfile } from '../types';
 import { calculateCardioCalories } from '../services/calorieCalculator';
+import { HealthSyncService } from '../services/healthSync';
 
 interface CardioPageProps {
   cardioTypes: CardioType[];
   cardioLogs: CardioLog[];
   userProfile: UserProfile;
+  cardioShortcutName?: string;
   onSaveCardioLog: (log: CardioLog) => void;
   onAddCardioType: (type: CardioType) => void;
   onDeleteCardioLog: (logId: string) => void;
@@ -16,6 +18,7 @@ export const CardioPage: React.FC<CardioPageProps> = ({
   cardioTypes,
   cardioLogs,
   userProfile,
+  cardioShortcutName = 'CardioLoggerSync',
   onSaveCardioLog,
   onAddCardioType,
   onDeleteCardioLog,
@@ -49,7 +52,7 @@ export const CardioPage: React.FC<CardioPageProps> = ({
     heightCm: userProfile.heightCm || 170,
   });
 
-  const handleSave = () => {
+  const handleSave = (syncToHealth: boolean = true) => {
     if (!currentType) return;
 
     // 触感フィードバック
@@ -70,6 +73,11 @@ export const CardioPage: React.FC<CardioPageProps> = ({
 
     onSaveCardioLog(newLog);
     setIsSavedSuccess(true);
+
+    if (syncToHealth) {
+      HealthSyncService.triggerCardioShortcut(newLog, cardioShortcutName);
+    }
+
     setTimeout(() => setIsSavedSuccess(false), 2000);
   };
 
@@ -237,15 +245,25 @@ export const CardioPage: React.FC<CardioPageProps> = ({
           />
         </div>
 
-        {/* 保存ボタン */}
-        <button
-          type="button"
-          onClick={handleSave}
-          className="w-full py-4 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-98 text-dark-950 font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-xl shadow-amber-500/30"
-        >
-          <Check className="w-4 h-4 stroke-[3]" />
-          <span>{isSavedSuccess ? '記録を保存しました！' : '有酸素運動を保存する'}</span>
-        </button>
+        {/* 保存アクション */}
+        <div className="space-y-2 pt-1">
+          <button
+            type="button"
+            onClick={() => handleSave(true)}
+            className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-98 text-dark-950 font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-xl shadow-amber-500/30"
+          >
+            <Smartphone className="w-4 h-4 stroke-[2.5]" />
+            <span>{isSavedSuccess ? '記録を保存しました！' : '保存してAppleヘルスケアに同期'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSave(false)}
+            className="w-full py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 active:scale-98 text-xs font-semibold text-slate-300 border border-dark-700 transition-all flex items-center justify-center gap-1.5"
+          >
+            <Check className="w-3.5 h-3.5 text-slate-400" />
+            <span>アプリ内のみ保存（ヘルスケア連携なし）</span>
+          </button>
+        </div>
       </div>
 
       {/* 直近の有酸素記録 */}
