@@ -9,8 +9,7 @@ export const HealthSyncService = {
 
     const payload = {
       workoutType: "Traditional Strength Training",
-      startDate: startedAt.toISOString(),
-      endDate: endedAt.toISOString(),
+      startDate: startedAt.toISOString().replace(/\.\d{3}Z$/, "Z"),
       durationMinutes: durationMinutes,
       menuName: session.menuName || "ワークアウト",
     };
@@ -66,33 +65,19 @@ export const HealthSyncService = {
     const caloriesNum = Number(log.calories) || 0;
     const startedAt = new Date(endedAt.getTime() - durationNum * 60000);
 
+    // ミリ秒を落とす（"2026-10-12T14:40:00Z"）- iOSショートカットのパース用
+    const startDate = startedAt.toISOString().replace(/\.\d{3}Z$/, "Z");
+
     const payload = {
-      workoutCategory: "cardio",
-      cardioTypeId: log.cardioTypeId,
       cardioTypeName: log.cardioTypeName,
-      startDate: startedAt.toISOString(),
-      endDate: endedAt.toISOString(),
-      開始日: startedAt.toISOString(),
-      開始日時: startedAt.toISOString(),
-      start: startedAt.toISOString(),
-      // 数値フィールド（表記ゆれ・日本語対応）
+      startDate: startDate,
       durationMinutes: durationNum,
-      duration: durationNum,
-      minutes: durationNum,
-      時間: durationNum,
-      分: durationNum,
-
       distanceKm: distanceNum,
-      distance: distanceNum,
-      km: distanceNum,
-      距離: distanceNum,
-
       calories: caloriesNum,
+      // ショートカット側の表記揺れ・簡略指定用エイリアス
+      duration: durationNum,
+      distance: distanceNum,
       calorie: caloriesNum,
-      kcal: caloriesNum,
-      カロリー: caloriesNum,
-
-      note: log.note || "",
     };
 
     const jsonString = JSON.stringify(payload);
