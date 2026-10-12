@@ -12,12 +12,21 @@ function setupSpreadsheet() {
     exSheet.appendRow(['exercise_id', 'body_part', 'exercise_name', 'equipment', 'note']);
     exSheet.getRange(1, 1, 1, 5).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
     
-    exSheet.appendRow(['ex-bench-press', 'chest', 'バーベル ベンチプレス', 'BARBELL', 'ラック高さ3番']);
-    exSheet.appendRow(['ex-incline-db-press', 'chest', 'インクライン ダンベルプレス', 'DUMBBELL', 'シート30度']);
-    exSheet.appendRow(['ex-deadlift', 'back', 'デッドリフト', 'BARBELL', 'ベルト着用']);
-    exSheet.appendRow(['ex-lat-pulldown', 'back', 'ラットプルダウン', 'MACHINE', 'ワイドグリップ']);
-    exSheet.appendRow(['ex-squat', 'legs', 'バーベル スクワット', 'BARBELL', 'パラレル']);
-    exSheet.appendRow(['ex-side-raise', 'shoulders', 'サイドレイズ', 'DUMBBELL', '']);
+    exSheet.appendRow(['ex-bench-press', 'chest', 'ベンチプレス', 'BARBELL', '']);
+    exSheet.appendRow(['ex-incline-bench-press', 'chest', 'インクラインベンチプレス', 'BARBELL', '']);
+    exSheet.appendRow(['ex-deadlift', 'back', 'デッドリフト', 'BARBELL', '']);
+    exSheet.appendRow(['ex-lat-pulldown', 'back', 'ラットプルダウン', 'MACHINE', '']);
+    exSheet.appendRow(['ex-seated-row', 'back', 'シーテッドロー', 'CABLE', '']);
+    exSheet.appendRow(['ex-assisted-chinup', 'back', 'アシストチンニング', 'MACHINE', '']);
+    exSheet.appendRow(['ex-dumbbell-row', 'back', 'ダンベルローイング', 'DUMBBELL', '']);
+    exSheet.appendRow(['ex-leg-press', 'legs', 'レッグプレス', 'MACHINE', '']);
+    exSheet.appendRow(['ex-leg-curl', 'legs', 'レッグカール', 'MACHINE', '']);
+    exSheet.appendRow(['ex-calf-press', 'legs', 'カーフプレス', 'MACHINE', '']);
+    exSheet.appendRow(['ex-shoulder-press', 'shoulders', 'ショルダープレス', 'MACHINE', '']);
+    exSheet.appendRow(['ex-face-pull', 'shoulders', 'ケーブルフェイスプル', 'CABLE', '']);
+    exSheet.appendRow(['ex-shoulder-shrug', 'shoulders', 'ショルダーシュラグ', 'BARBELL', '']);
+    exSheet.appendRow(['ex-cable-pushdown', 'arms', 'ケーブルプレスダウン', 'CABLE', '']);
+    exSheet.appendRow(['ex-dumbbell-wrist-curl', 'arms', 'ダンベルリストカール', 'DUMBBELL', '']);
   }
 
   // 2. menus (メニューマスタ)
@@ -27,9 +36,9 @@ function setupSpreadsheet() {
     menuSheet.appendRow(['menu_id', 'menu_name', 'target_parts', 'sort_order']);
     menuSheet.getRange(1, 1, 1, 4).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
 
-    menuSheet.appendRow(['menu-push-a', 'Push Day A (胸・肩・三頭)', '胸・肩・三頭', 1]);
-    menuSheet.appendRow(['menu-pull-a', 'Pull Day A (背中・二頭)', '背中・二頭', 2]);
-    menuSheet.appendRow(['menu-legs', 'Legs & Abs (脚・腹筋)', '脚・腹筋', 3]);
+    menuSheet.appendRow(['menu-chest-arms', '胸・腕 (Push)', '胸・腕', 1]);
+    menuSheet.appendRow(['menu-back', '背中 (Pull)', '背中・肩リア', 2]);
+    menuSheet.appendRow(['menu-legs-lower', '下半身 (Legs)', '脚・カーフ', 3]);
   }
 
   // 3. schedule (曜日別デフォルト)
@@ -40,11 +49,11 @@ function setupSpreadsheet() {
     schedSheet.getRange(1, 1, 1, 3).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
 
     schedSheet.appendRow([0, '日曜日', '']);
-    schedSheet.appendRow([1, '月曜日', 'menu-push-a']);
+    schedSheet.appendRow([1, '月曜日', 'menu-chest-arms']);
     schedSheet.appendRow([2, '火曜日', '']);
-    schedSheet.appendRow([3, '水曜日', 'menu-pull-a']);
+    schedSheet.appendRow([3, '水曜日', 'menu-back']);
     schedSheet.appendRow([4, '木曜日', '']);
-    schedSheet.appendRow([5, '金曜日', 'menu-legs']);
+    schedSheet.appendRow([5, '金曜日', 'menu-legs-lower']);
     schedSheet.appendRow([6, '土曜日', '']);
   }
 
