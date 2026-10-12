@@ -6,10 +6,13 @@ export const HealthSyncService = {
     const startedAt = new Date(session.startedAt);
     const endedAt = session.endedAt ? new Date(session.endedAt) : new Date();
 
+    const durationMinutes = Math.max(1, Math.round((endedAt.getTime() - startedAt.getTime()) / 60000));
+
     const payload = {
       workoutType: "Traditional Strength Training",
       startDate: startedAt.toISOString(),
       endDate: endedAt.toISOString(),
+      durationMinutes: durationMinutes,
       menuName: session.menuName || "ワークアウト",
     };
 
