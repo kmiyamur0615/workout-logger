@@ -9,22 +9,35 @@ import {
   Trash2, 
   ChevronDown, 
   ChevronUp, 
-  ListFilter 
+  ListFilter,
+  Edit2,
+  X,
+  Plus,
+  Check
 } from 'lucide-react';
-import { WorkoutSession, CardioLog } from '../types';
+import { WorkoutSession, CardioLog, CardioType, UserProfile, WorkoutSet } from '../types';
+import { calculateCardioCalories } from '../services/calorieCalculator';
 
 interface HistoryPageProps {
   sessions: WorkoutSession[];
   cardioLogs: CardioLog[];
+  cardioTypes?: CardioType[];
+  userProfile?: UserProfile;
   onDeleteSession: (sessionId: string) => void;
+  onUpdateSession?: (session: WorkoutSession) => void;
   onDeleteCardioLog: (logId: string) => void;
+  onUpdateCardioLog?: (log: CardioLog) => void;
 }
 
 export const HistoryPage: React.FC<HistoryPageProps> = ({
   sessions,
   cardioLogs,
+  cardioTypes = [],
+  userProfile = { heightCm: 172, weightKg: 68 },
   onDeleteSession,
+  onUpdateSession,
   onDeleteCardioLog,
+  onUpdateCardioLog,
 }) => {
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -33,6 +46,82 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
     return today.toISOString().slice(0, 10);
   });
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+
+  // 編集モーダル用の状態
+  const [editingSession, setEditingSession] = useState<WorkoutSession | null>(null);
+  const [editingCardio, setEditingCardio] = useState<CardioLog | null>(null);
+
+  const toInputDateTime = (isoStr?: string) => {
+    if (!isoStr) return '';
+    try {
+      const d = new Date(isoStr);
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+      return d.toISOString().slice(0, 16);
+    } catch (_) {
+      return '';
+    }
+  };
+
+  const handleSaveEditedSession = () => {
+    if (!editingSession || !onUpdateSession) return;
+    onUpdateSession(editingSession);
+    setEditingSession(null);
+  };
+
+  const handleUpdateSetInEditingSession = (exerciseIndex: number, setIndex: number, field: keyof WorkoutSet, val: any) => {
+    if (!editingSession) return;
+    const updatedExercises = [...editingSession.exercises];
+    const targetExercise = { ...updatedExercises[exerciseIndex] };
+    const updatedSets = [...targetExercise.sets];
+    updatedSets[setIndex] = { ...updatedSets[setIndex], [field]: val };
+    targetExercise.sets = updatedSets;
+    updatedExercises[exerciseIndex] = targetExercise;
+    setEditingSession({ ...editingSession, exercises: updatedExercises });
+  };
+
+  const handleDeleteSetInEditingSession = (exerciseIndex: number, setIndex: number) => {
+    if (!editingSession) return;
+    const updatedExercises = [...editingSession.exercises];
+    const targetExercise = { ...updatedExercises[exerciseIndex] };
+    targetExercise.sets = targetExercise.sets.filter((_, idx) => idx !== setIndex);
+    updatedExercises[exerciseIndex] = targetExercise;
+    setEditingSession({ ...editingSession, exercises: updatedExercises });
+  };
+
+  const handleAddSetInEditingSession = (exerciseIndex: number) => {
+    if (!editingSession) return;
+    const updatedExercises = [...editingSession.exercises];
+    const targetExercise = { ...updatedExercises[exerciseIndex] };
+    const lastSet = targetExercise.sets[targetExercise.sets.length - 1];
+    const newSet: WorkoutSet = {
+      id: `set-${Date.now()}-${Math.random()}`,
+      setNumber: targetExercise.sets.length + 1,
+      weight: lastSet ? lastSet.weight : 50,
+      reps: lastSet ? lastSet.reps : 10,
+      isCompleted: true,
+    };
+    targetExercise.sets = [...targetExercise.sets, newSet];
+    updatedExercises[exerciseIndex] = targetExercise;
+    setEditingSession({ ...editingSession, exercises: updatedExercises });
+  };
+
+  const handleRecalculateCalories = (c: CardioLog) => {
+    const cType = cardioTypes.find(t => t.id === c.cardioTypeId);
+    return calculateCardioCalories({
+      cardioTypeName: c.cardioTypeName,
+      defaultMets: cType?.defaultMets || 6.0,
+      distanceKm: c.distanceKm || 0,
+      durationMinutes: c.durationMinutes || 0,
+      weightKg: userProfile.weightKg || 65,
+      heightCm: userProfile.heightCm || 170,
+    });
+  };
+
+  const handleSaveEditedCardio = () => {
+    if (!editingCardio || !onUpdateCardioLog) return;
+    onUpdateCardioLog(editingCardio);
+    setEditingCardio(null);
+  };
 
   // カレンダー計算
   const year = currentDate.getFullYear();
@@ -332,10 +421,19 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                             ))}
                           </div>
 
-                          <div className="flex justify-end pt-1">
+                          <div className="flex justify-end gap-2 pt-2 border-t border-dark-800">
                             <button
+                              type="button"
+                              onClick={() => setEditingSession(JSON.parse(JSON.stringify(session)))}
+                              className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 py-1 px-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 active:scale-95"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                              <span>編集</span>
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => onDeleteSession(session.id)}
-                              className="text-[11px] text-red-400 hover:text-red-300 flex items-center gap-1 p-1"
+                              className="text-[11px] text-red-400 hover:text-red-300 flex items-center gap-1 py-1 px-2.5 rounded-lg bg-red-500/10 border border-red-500/20 active:scale-95"
                             >
                               <Trash2 className="w-3 h-3" />
                               <span>削除</span>
@@ -355,12 +453,24 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                         <Activity className="w-3 h-3" />
                         <span>有酸素</span>
                       </span>
-                      <button
-                        onClick={() => onDeleteCardioLog(log.id)}
-                        className="text-slate-500 hover:text-red-400 p-0.5"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingCardio({ ...log })}
+                          className="text-slate-400 hover:text-blue-400 p-1 rounded-lg hover:bg-dark-800 active:scale-95"
+                          title="編集"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteCardioLog(log.id)}
+                          className="text-slate-500 hover:text-red-400 p-1 rounded-lg hover:bg-dark-800 active:scale-95"
+                          title="削除"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="flex items-center justify-between">
@@ -414,33 +524,361 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
 
                     {/* 筋トレ一覧 */}
                     {entry.strength.map(s => (
-                      <div key={s.id} className="flex items-center justify-between text-xs py-1">
+                      <div key={s.id} className="flex items-center justify-between text-xs py-1.5 border-b border-dark-800/40 last:border-0">
                         <span className="text-white font-semibold flex items-center gap-1">
                           <Dumbbell className="w-3.5 h-3.5 text-brand-neon" />
                           <span>{s.menuName || '筋トレ'}</span>
                         </span>
-                        <span className="text-slate-400 font-mono">
-                          {s.exercises.reduce((acc, ex) => acc + ex.sets.filter(st => st.isCompleted).length, 0)} sets
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-400 font-mono text-[11px]">
+                            {s.exercises.reduce((acc, ex) => acc + ex.sets.filter(st => st.isCompleted).length, 0)} sets
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingSession(JSON.parse(JSON.stringify(s)))}
+                            className="text-slate-400 hover:text-blue-400 p-1 rounded hover:bg-dark-800 active:scale-95"
+                            title="編集"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteSession(s.id)}
+                            className="text-slate-500 hover:text-red-400 p-1 rounded hover:bg-dark-800 active:scale-95"
+                            title="削除"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                     ))}
 
                     {/* 有酸素一覧 */}
                     {entry.cardio.map(c => (
-                      <div key={c.id} className="flex items-center justify-between text-xs py-1">
+                      <div key={c.id} className="flex items-center justify-between text-xs py-1.5 border-b border-dark-800/40 last:border-0">
                         <span className="text-amber-400 font-semibold flex items-center gap-1">
                           <Activity className="w-3.5 h-3.5" />
                           <span>{c.cardioTypeName}</span>
                         </span>
-                        <span className="text-amber-400 font-mono">
-                          {c.calories} kcal
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-amber-400 font-mono text-[11px]">
+                            {c.distanceKm > 0 && `${c.distanceKm}km · `}{c.durationMinutes}分 · {c.calories} kcal
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingCardio({ ...c })}
+                            className="text-slate-400 hover:text-blue-400 p-1 rounded hover:bg-dark-800 active:scale-95"
+                            title="編集"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteCardioLog(c.id)}
+                            className="text-slate-500 hover:text-red-400 p-1 rounded hover:bg-dark-800 active:scale-95"
+                            title="削除"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 筋トレ編集モーダル */}
+      {editingSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="bg-dark-900 border border-dark-700 w-full max-w-md rounded-3xl p-5 shadow-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-dark-800">
+              <div className="flex items-center gap-2">
+                <Dumbbell className="w-5 h-5 text-brand-neon" />
+                <h3 className="font-bold text-white text-base">筋トレ記録を編集</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingSession(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 my-4 overflow-y-auto flex-1 pr-1">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  メニュー / ワークアウト名
+                </label>
+                <input
+                  type="text"
+                  value={editingSession.menuName || ''}
+                  onChange={(e) => setEditingSession({ ...editingSession, menuName: e.target.value })}
+                  placeholder="例: 胸・腕"
+                  className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-neon font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  開始日時
+                </label>
+                <input
+                  type="datetime-local"
+                  value={toInputDateTime(editingSession.startedAt)}
+                  onChange={(e) => setEditingSession({ ...editingSession, startedAt: new Date(e.target.value).toISOString() })}
+                  className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-neon font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  メモ (任意)
+                </label>
+                <input
+                  type="text"
+                  value={editingSession.note || ''}
+                  onChange={(e) => setEditingSession({ ...editingSession, note: e.target.value })}
+                  placeholder="メモを入力..."
+                  className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-neon"
+                />
+              </div>
+
+              {/* 種目・セット編集 */}
+              <div className="space-y-3 pt-2 border-t border-dark-800">
+                <div className="text-xs font-bold text-slate-300">種目 & セット</div>
+                {editingSession.exercises.map((ex, exIdx) => (
+                  <div key={ex.id} className="p-3 rounded-2xl bg-dark-850 border border-dark-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-xs">{ex.exerciseName}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleAddSetInEditingSession(exIdx)}
+                        className="text-[10px] text-brand-neon hover:underline flex items-center gap-0.5 font-bold"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>セット追加</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {ex.sets.map((set, setIdx) => (
+                        <div key={set.id} className="flex items-center gap-2 bg-dark-900/60 p-1.5 rounded-xl border border-dark-800">
+                          <span className="text-[10px] font-mono text-slate-400 w-6">#{set.setNumber}</span>
+                          <div className="flex items-center gap-1 flex-1">
+                            <input
+                              type="number"
+                              step="0.5"
+                              value={set.weight}
+                              onChange={(e) => handleUpdateSetInEditingSession(exIdx, setIdx, 'weight', parseFloat(e.target.value) || 0)}
+                              className="w-16 bg-dark-800 border border-dark-700 rounded-lg px-1.5 py-1 text-center font-mono text-xs text-white"
+                            />
+                            <span className="text-[10px] text-slate-400">kg</span>
+                            <span className="text-slate-500 mx-0.5">×</span>
+                            <input
+                              type="number"
+                              step="1"
+                              value={set.reps}
+                              onChange={(e) => handleUpdateSetInEditingSession(exIdx, setIdx, 'reps', parseInt(e.target.value) || 0)}
+                              className="w-12 bg-dark-800 border border-dark-700 rounded-lg px-1.5 py-1 text-center font-mono text-xs text-white"
+                            />
+                            <span className="text-[10px] text-slate-400">回</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateSetInEditingSession(exIdx, setIdx, 'isCompleted', !set.isCompleted)}
+                            className={`p-1 rounded-md text-[10px] font-bold ${set.isCompleted ? 'bg-brand-neon/20 text-brand-neon' : 'bg-dark-800 text-slate-500'}`}
+                          >
+                            {set.isCompleted ? '完了' : '未完'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSetInEditingSession(exIdx, setIdx)}
+                            className="p-1 text-slate-500 hover:text-red-400"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-dark-800 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingSession(null)}
+                className="flex-1 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-xs font-semibold text-slate-300"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEditedSession}
+                className="flex-1 py-2.5 rounded-xl bg-brand-neon hover:bg-green-400 text-dark-950 text-xs font-black shadow-lg shadow-brand-neon/20 flex items-center justify-center gap-1"
+              >
+                <Check className="w-4 h-4 stroke-[2.5]" />
+                <span>保存する</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 有酸素編集モーダル */}
+      {editingCardio && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="bg-dark-900 border border-dark-700 w-full max-w-sm rounded-3xl p-5 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-dark-800">
+              <div className="flex items-center gap-2">
+                <Activity className="w-5 h-5 text-amber-400" />
+                <h3 className="font-bold text-white text-base">有酸素記録を編集</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingCardio(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 my-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  運動種別
+                </label>
+                <select
+                  value={editingCardio.cardioTypeId}
+                  onChange={(e) => {
+                    const sel = cardioTypes.find(t => t.id === e.target.value);
+                    const updated = {
+                      ...editingCardio,
+                      cardioTypeId: e.target.value,
+                      cardioTypeName: sel ? sel.name : editingCardio.cardioTypeName,
+                    };
+                    updated.calories = handleRecalculateCalories(updated);
+                    setEditingCardio(updated);
+                  }}
+                  className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-bold"
+                >
+                  {cardioTypes.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                  {!cardioTypes.some(t => t.id === editingCardio.cardioTypeId) && (
+                    <option value={editingCardio.cardioTypeId}>{editingCardio.cardioTypeName}</option>
+                  )}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    距離 (km)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingCardio.distanceKm}
+                    onChange={(e) => {
+                      const updated = { ...editingCardio, distanceKm: parseFloat(e.target.value) || 0 };
+                      updated.calories = handleRecalculateCalories(updated);
+                      setEditingCardio(updated);
+                    }}
+                    className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    時間 (分)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={editingCardio.durationMinutes}
+                    onChange={(e) => {
+                      const updated = { ...editingCardio, durationMinutes: parseFloat(e.target.value) || 0 };
+                      updated.calories = handleRecalculateCalories(updated);
+                      setEditingCardio(updated);
+                    }}
+                    className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  終了日時
+                </label>
+                <input
+                  type="datetime-local"
+                  value={toInputDateTime(editingCardio.endedAt)}
+                  onChange={(e) => setEditingCardio({ ...editingCardio, endedAt: new Date(e.target.value).toISOString() })}
+                  className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  消費カロリー (kcal)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={editingCardio.calories}
+                    onChange={(e) => setEditingCardio({ ...editingCardio, calories: parseInt(e.target.value) || 0 })}
+                    className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-amber-400 focus:outline-none focus:border-amber-400 font-mono font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEditingCardio({ ...editingCardio, calories: handleRecalculateCalories(editingCardio) })}
+                    className="px-2.5 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-[10px] text-slate-300 whitespace-nowrap border border-dark-700 active:scale-95"
+                  >
+                    再計算
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  メモ (任意)
+                </label>
+                <input
+                  type="text"
+                  value={editingCardio.note || ''}
+                  onChange={(e) => setEditingCardio({ ...editingCardio, note: e.target.value })}
+                  placeholder="メモを入力..."
+                  className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-dark-800 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingCardio(null)}
+                className="flex-1 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-xs font-semibold text-slate-300"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEditedCardio}
+                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-dark-950 text-xs font-black shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1"
+              >
+                <Check className="w-4 h-4 stroke-[2.5]" />
+                <span>保存する</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

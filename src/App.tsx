@@ -159,11 +159,21 @@ export function App() {
     setPastSessions(updated);
   };
 
+  const handleUpdatePastSession = (session: WorkoutSession) => {
+    StorageService.updatePastSession(session);
+    setPastSessions(StorageService.getPastSessions());
+  };
+
   // 有酸素運動操作
   const handleSaveCardioLog = (log: CardioLog) => {
     StorageService.addCardioLog(log);
     setCardioLogs(StorageService.getCardioLogs());
     setCurrentTab('history');
+  };
+
+  const handleUpdateCardioLog = (log: CardioLog) => {
+    StorageService.updateCardioLog(log);
+    setCardioLogs(StorageService.getCardioLogs());
   };
 
   const handleDeleteCardioLog = (logId: string) => {
@@ -301,8 +311,12 @@ export function App() {
           <HistoryPage
             sessions={pastSessions}
             cardioLogs={cardioLogs}
+            cardioTypes={cardioTypes}
+            userProfile={settings.profile}
             onDeleteSession={handleDeletePastSession}
+            onUpdateSession={handleUpdatePastSession}
             onDeleteCardioLog={handleDeleteCardioLog}
+            onUpdateCardioLog={handleUpdateCardioLog}
           />
         )}
 
@@ -332,6 +346,7 @@ export function App() {
         currentTab={currentTab}
         onChangeTab={setCurrentTab}
         hasActiveWorkout={!!activeSession}
+        hapticsEnabled={settings.hapticsEnabled}
       />
     </div>
   );

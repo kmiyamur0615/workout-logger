@@ -1,33 +1,31 @@
 import React, { useState } from 'react';
-import { Activity, Flame, Plus, Check, Calendar, Trash2, Smartphone } from 'lucide-react';
+import { Activity, Flame, Plus, Check, Calendar, Smartphone } from 'lucide-react';
 import { CardioType, CardioLog, UserProfile, AppSettings } from '../types';
 import { calculateCardioCalories } from '../services/calorieCalculator';
 import { HealthSyncService } from '../services/healthSync';
 
 interface CardioPageProps {
   cardioTypes: CardioType[];
-  cardioLogs: CardioLog[];
+  cardioLogs?: CardioLog[];
   userProfile: UserProfile;
   settings?: AppSettings;
   cardioShortcutName?: string;
   onSaveCardioLog: (log: CardioLog) => void;
   onAddCardioType: (type: CardioType) => void;
-  onDeleteCardioLog: (logId: string) => void;
+  onDeleteCardioLog?: (logId: string) => void;
 }
 
 export const CardioPage: React.FC<CardioPageProps> = ({
   cardioTypes,
-  cardioLogs,
   userProfile,
   settings,
   cardioShortcutName = 'CardioLoggerSync',
   onSaveCardioLog,
   onAddCardioType,
-  onDeleteCardioLog,
 }) => {
   const [selectedTypeId, setSelectedTypeId] = useState<string>(cardioTypes[0]?.id || '');
-  const [distance, setDistance] = useState<string>('5.0');
-  const [duration, setDuration] = useState<string>('30');
+  const [distance, setDistance] = useState<string>('');
+  const [duration, setDuration] = useState<string>('');
   const [endedAt, setEndedAt] = useState<string>(() => {
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -35,6 +33,21 @@ export const CardioPage: React.FC<CardioPageProps> = ({
   });
   const [note, setNote] = useState<string>('');
   const [isSavedSuccess, setIsSavedSuccess] = useState(false);
+
+  // 数字のみの入力制限ハンドラー
+  const handleDistanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+      setDistance(val);
+    }
+  };
+
+  const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val === '' || /^\d*$/.test(val)) {
+      setDuration(val);
+    }
+  };
 
   // 新規種別追加
   const [isAddingType, setIsAddingType] = useState<boolean>(false);
@@ -63,9 +76,13 @@ export const CardioPage: React.FC<CardioPageProps> = ({
 
   const handleSave = (syncToHealth: boolean = true) => {
     if (!currentType) return;
+    if (durationNum <= 0) {
+      alert('運動時間（分）を入力してください');
+      return;
+    }
 
-    // 触感フィードバック
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    // 触感フィードバック (設定がONの場合のみ)
+    if (settings?.hapticsEnabled !== false && typeof navigator !== 'undefined' && navigator.vibrate) {
       try { navigator.vibrate([20, 50, 20]); } catch (_) {}
     }
 
@@ -185,11 +202,11 @@ export const CardioPage: React.FC<CardioPageProps> = ({
               距離 (km)
             </label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={distance}
-              onChange={(e) => setDistance(e.target.value)}
-              placeholder="5.0"
+              onChange={handleDistanceChange}
+              placeholder="0.0"
               className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-3.5 py-3 text-lg font-mono font-bold text-white focus:outline-none focus:border-amber-400 text-center"
             />
           </div>
@@ -199,11 +216,11 @@ export const CardioPage: React.FC<CardioPageProps> = ({
               時間 (分)
             </label>
             <input
-              type="number"
-              step="1"
+              type="text"
+              inputMode="numeric"
               value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              placeholder="30"
+              onChange={handleDurationChange}
+              placeholder="0"
               className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-3.5 py-3 text-lg font-mono font-bold text-white focus:outline-none focus:border-amber-400 text-center"
             />
           </div>
@@ -285,39 +302,6 @@ export const CardioPage: React.FC<CardioPageProps> = ({
           </button>
         </div>
       </div>
-
-      {/* 直近の有酸素記録 */}
-      {cardioLogs.length > 0 && (
-        <div className="bg-dark-850 border border-dark-800 rounded-3xl p-4 shadow-lg space-y-3">
-          <h3 className="text-xs font-bold text-slate-400 px-1">直近の有酸素履歴</h3>
-          <div className="space-y-2">
-            {cardioLogs.slice(0, 3).map((log) => (
-              <div key={log.id} className="p-3 rounded-2xl bg-dark-900/60 border border-dark-800 flex items-center justify-between text-xs">
-                <div>
-                  <div className="font-bold text-white flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-400" />
-                    <span>{log.cardioTypeName}</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5 font-mono">
-                    {new Date(log.endedAt).toLocaleDateString('ja-JP')} · {log.distanceKm > 0 && `${log.distanceKm}km · `}{log.durationMinutes}分
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-right">
-                    <div className="font-mono font-bold text-amber-400">{log.calories} kcal</div>
-                  </div>
-                  <button
-                    onClick={() => onDeleteCardioLog(log.id)}
-                    className="text-slate-500 hover:text-red-400 p-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

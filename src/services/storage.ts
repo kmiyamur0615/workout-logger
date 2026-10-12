@@ -182,6 +182,10 @@ export const StorageService = {
   savePastSessions(sessions: WorkoutSession[]): void {
     setStored(KEYS.PAST_SESSIONS, sessions);
   },
+  updatePastSession(session: WorkoutSession): void {
+    const sessions = this.getPastSessions().map(s => s.id === session.id ? session : s);
+    this.savePastSessions(sessions);
+  },
   addCompletedSession(session: WorkoutSession): void {
     const sessions = this.getPastSessions();
     this.savePastSessions([session, ...sessions]);
@@ -256,6 +260,10 @@ export const StorageService = {
   addCardioLog(log: CardioLog): void {
     const logs = this.getCardioLogs();
     this.saveCardioLogs([log, ...logs]);
+  },
+  updateCardioLog(log: CardioLog): void {
+    const logs = this.getCardioLogs().map(l => l.id === log.id ? log : l);
+    this.saveCardioLogs(logs);
   },
   deleteCardioLog(logId: string): void {
     const logs = this.getCardioLogs().filter(l => l.id !== logId);

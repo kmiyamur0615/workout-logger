@@ -7,12 +7,14 @@ interface NavigationProps {
   currentTab: TabType;
   onChangeTab: (tab: TabType) => void;
   hasActiveWorkout: boolean;
+  hapticsEnabled?: boolean;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
   currentTab,
   onChangeTab,
-  hasActiveWorkout
+  hasActiveWorkout,
+  hapticsEnabled = true,
 }) => {
   const tabs = [
     { id: 'home' as TabType, label: 'ホーム', icon: Home, activeColor: 'text-brand-neon' },
@@ -30,7 +32,7 @@ export const Navigation: React.FC<NavigationProps> = ({
 
   const handleTabClick = (tabId: TabType) => {
     // 触感フィードバック (Web Vibration API)
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    if (hapticsEnabled && typeof navigator !== 'undefined' && navigator.vibrate) {
       try { navigator.vibrate(10); } catch (_) {}
     }
     onChangeTab(tabId);

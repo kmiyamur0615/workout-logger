@@ -57,6 +57,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [runShortcut, setRunShortcut] = useState(settings.cardioShortcuts?.run || 'CardioSync_Run');
   const [cycleShortcut, setCycleShortcut] = useState(settings.cardioShortcuts?.cycle || 'CardioSync_Cycle');
   const [walkShortcut, setWalkShortcut] = useState(settings.cardioShortcuts?.walk || 'CardioSync_Walk');
+  const [hapticsEnabled, setHapticsEnabled] = useState(settings.hapticsEnabled ?? true);
   const [isSaved, setIsSaved] = useState(false);
 
   // 有酸素種別追加
@@ -93,6 +94,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         cycle: cycleShortcut.trim() || 'CardioSync_Cycle',
         walk: walkShortcut.trim() || 'CardioSync_Walk',
       },
+      hapticsEnabled: hapticsEnabled,
     };
     onSaveSettings(updated);
     setIsSaved(true);
@@ -333,7 +335,43 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </button>
       </div>
 
-      {/* 4. 有酸素運動の種別管理 */}
+      {/* 4. 操作・フィードバック設定 (ハプティクス) */}
+      <div className="bg-dark-850 border border-dark-800 rounded-3xl p-5 shadow-lg space-y-3">
+        <div className="flex items-center gap-2">
+          <Smartphone className="w-4 h-4 text-brand-neon" />
+          <h3 className="text-sm font-bold text-white">操作・フィードバック設定</h3>
+        </div>
+
+        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-dark-900/60 border border-dark-800">
+          <div>
+            <div className="text-xs font-bold text-white">ハプティクス (触感バイブレーション)</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">
+              画面タップや記録保存時の微細な振動フィードバック
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !hapticsEnabled;
+              setHapticsEnabled(next);
+              if (next && typeof navigator !== 'undefined' && navigator.vibrate) {
+                try { navigator.vibrate(20); } catch (_) {}
+              }
+            }}
+            className={`w-12 h-6 rounded-full transition-colors relative flex items-center p-0.5 active:scale-95 ${
+              hapticsEnabled ? 'bg-brand-neon' : 'bg-dark-700'
+            }`}
+          >
+            <span
+              className={`block w-5 h-5 rounded-full bg-dark-950 transition-transform ${
+                hapticsEnabled ? 'translate-x-6' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* 5. 有酸素運動の種別管理 */}
       <div className="bg-dark-850 border border-dark-800 rounded-3xl p-5 shadow-lg space-y-3">
         <div className="flex items-center gap-2">
           <Activity className="w-4 h-4 text-amber-400" />
@@ -385,7 +423,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
       </div>
 
-      {/* 5. Googleスプレッドシート & ヘルスケア書き込みショートカット */}
+      {/* 6. Googleスプレッドシート & ヘルスケア書き込みショートカット */}
       <div className="bg-dark-850 border border-dark-800 rounded-3xl p-5 shadow-lg space-y-3">
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-brand-neon" />
