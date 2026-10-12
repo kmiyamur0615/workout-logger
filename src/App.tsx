@@ -194,9 +194,9 @@ export function App() {
   return (
     <div className="min-h-screen bg-dark-900 text-slate-100 flex flex-col font-sans">
       <Header
-        onOpenSettings={() => setCurrentTab('settings')}
         onSyncGAS={handleSyncGAS}
         isSyncing={isSyncing}
+        activeSessionName={activeSession ? (activeSession.menuName || 'ワークアウト') : undefined}
       />
 
       <main className="flex-1">

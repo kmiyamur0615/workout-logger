@@ -33,6 +33,7 @@ export const CardioPage: React.FC<CardioPageProps> = ({
   });
   const [note, setNote] = useState<string>('');
   const [isSavedSuccess, setIsSavedSuccess] = useState(false);
+  const [syncToHealth, setSyncToHealth] = useState(true);
 
   // 数字のみの入力制限ハンドラー
   const handleDistanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -272,33 +273,51 @@ export const CardioPage: React.FC<CardioPageProps> = ({
         </div>
 
         {/* 保存アクション */}
-        <div className="space-y-2 pt-1">
-          <button
-            type="button"
-            onClick={() => handleSave(true)}
-            className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-98 text-dark-950 font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-xl shadow-amber-500/30"
-          >
-            <Smartphone className="w-4 h-4 stroke-[2.5]" />
-            <span>
-              {isSavedSuccess
-                ? '記録を保存しました！'
-                : `保存してAppleヘルスケアに同期 (${currentType?.name || '有酸素'})`}
-            </span>
-          </button>
-          <div className="px-1 text-center">
-            <span className="text-[10px] text-slate-400">
-              ※iOSヘルスケアに種別「{currentType?.name}」で記録するため、ショートカット「
-              <span className="text-amber-400 font-mono font-bold">{targetShortcutName}</span>
-              」を実行します
-            </span>
+        <div className="space-y-3 pt-2">
+          {/* Appleヘルスケア連携トグル */}
+          <div className="flex items-center justify-between px-2 py-1 bg-dark-900/60 rounded-xl border border-dark-800">
+            <div className="flex items-center gap-2">
+              <Smartphone className={`w-4 h-4 transition-colors ${syncToHealth ? 'text-amber-400' : 'text-slate-500'}`} />
+              <span className="text-xs font-medium text-slate-300">Appleヘルスケアに連携</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSyncToHealth(!syncToHealth)}
+              className={`w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 active:scale-95 ${
+                syncToHealth ? 'bg-amber-500' : 'bg-dark-750'
+              }`}
+              aria-label="Appleヘルスケア連携の切り替え"
+            >
+              <span
+                className={`block w-5 h-5 rounded-full bg-dark-950 transition-transform ${
+                  syncToHealth ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
+
+          {/* メイン保存ボタン */}
           <button
             type="button"
-            onClick={() => handleSave(false)}
-            className="w-full py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 active:scale-98 text-xs font-semibold text-slate-300 border border-dark-700 transition-all flex items-center justify-center gap-1.5"
+            onClick={() => handleSave(syncToHealth)}
+            disabled={isSavedSuccess}
+            className={`w-full py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-xl active:scale-98 ${
+              isSavedSuccess
+                ? 'bg-green-500 text-dark-950 shadow-green-500/25'
+                : 'bg-amber-500 hover:bg-amber-400 text-dark-950 shadow-amber-500/25'
+            }`}
           >
-            <Check className="w-3.5 h-3.5 text-slate-400" />
-            <span>アプリ内のみ保存（ヘルスケア連携なし）</span>
+            {isSavedSuccess ? (
+              <>
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>保存しました！</span>
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4 stroke-[2.5]" />
+                <span>有酸素運動を記録</span>
+              </>
+            )}
           </button>
         </div>
       </div>

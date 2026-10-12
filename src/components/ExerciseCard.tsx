@@ -58,26 +58,27 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
 
       {/* 上のSetからのコピーボタングループ */}
       {exercise.sets.length > 1 && (
-        <div className="flex items-center gap-1.5 py-2 overflow-x-auto">
+        <div className="flex items-center gap-1.5 py-1.5 overflow-x-auto">
           <button
             type="button"
             onClick={() => onCopyFromAbove(exercise.id, 'all')}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dark-800 hover:bg-dark-750 active:scale-95 text-[11px] font-bold text-brand-neon border border-brand-accent/40 transition-all whitespace-nowrap shadow-sm"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-neon/15 hover:bg-brand-neon/25 active:scale-95 text-[11px] font-bold text-brand-neon border border-brand-neon/30 transition-all whitespace-nowrap"
+            title="上のセットの重量・回数をコピー"
           >
             <Copy className="w-3 h-3" />
-            <span>上のSetをコピー (重量・回数・完了)</span>
+            <span>前セットを複製</span>
           </button>
           <button
             type="button"
             onClick={() => onCopyFromAbove(exercise.id, 'weight')}
-            className="px-2.5 py-1.5 rounded-lg bg-dark-800 hover:bg-dark-750 active:scale-95 text-[11px] font-medium text-slate-300 hover:text-white border border-dark-700 transition-all whitespace-nowrap"
+            className="px-2 py-1 rounded-lg bg-dark-800 hover:bg-dark-750 active:scale-95 text-[10px] text-slate-300 border border-dark-700 transition-all whitespace-nowrap"
           >
             重量のみ
           </button>
           <button
             type="button"
             onClick={() => onCopyFromAbove(exercise.id, 'reps')}
-            className="px-2.5 py-1.5 rounded-lg bg-dark-800 hover:bg-dark-750 active:scale-95 text-[11px] font-medium text-slate-300 hover:text-white border border-dark-700 transition-all whitespace-nowrap"
+            className="px-2 py-1 rounded-lg bg-dark-800 hover:bg-dark-750 active:scale-95 text-[10px] text-slate-300 border border-dark-700 transition-all whitespace-nowrap"
           >
             回数のみ
           </button>

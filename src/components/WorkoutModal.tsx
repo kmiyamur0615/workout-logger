@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Save, X, Activity } from 'lucide-react';
+import { CheckCircle2, X, Activity } from 'lucide-react';
 import { WorkoutSession } from '../types';
 
 interface WorkoutModalProps {
@@ -20,12 +20,21 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
   isSyncing = false,
 }) => {
   const [note, setNote] = useState('');
+  const [syncExternal, setSyncExternal] = useState(true);
 
   if (!isOpen) return null;
 
   const totalExercises = session.exercises.length;
   const totalSets = session.exercises.reduce((acc, ex) => acc + ex.sets.length, 0);
   const completedSets = session.exercises.reduce((acc, ex) => acc + ex.sets.filter(s => s.isCompleted).length, 0);
+
+  const handleFinish = () => {
+    if (syncExternal) {
+      onCompleteAndSync(note);
+    } else {
+      onCompleteLocalOnly(note);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -45,7 +54,7 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
           <p className="text-xs text-slate-400 mt-0.5">{session.menuName || 'フリーワークアウト'}</p>
         </div>
 
-        {/* 実施サマリー (時間・ボリュームを排除し、種目数・完了セット数に純化) */}
+        {/* 実施サマリー */}
         <div className="grid grid-cols-2 gap-2 bg-dark-850 p-3 rounded-2xl border border-dark-800 mb-4 text-center">
           <div>
             <div className="text-[10px] text-slate-400 font-medium">実施種目数</div>
@@ -74,25 +83,39 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
           />
         </div>
 
-        {/* アクションボタン */}
-        <div className="space-y-2">
+        {/* アクションエリア */}
+        <div className="space-y-3">
+          {/* 外部同期トグル */}
+          <div className="flex items-center justify-between px-2 py-1 bg-dark-850 rounded-xl border border-dark-800">
+            <div className="flex items-center gap-2">
+              <Activity className={`w-4 h-4 transition-colors ${syncExternal ? 'text-brand-neon' : 'text-slate-500'}`} />
+              <span className="text-xs font-medium text-slate-300">ヘルスケア ＆ スプレッドシート連携</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSyncExternal(!syncExternal)}
+              className={`w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 active:scale-95 ${
+                syncExternal ? 'bg-brand-neon' : 'bg-dark-750'
+              }`}
+              aria-label="外部同期の切り替え"
+            >
+              <span
+                className={`block w-5 h-5 rounded-full bg-dark-950 transition-transform ${
+                  syncExternal ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* メイン完了ボタン */}
           <button
             type="button"
             disabled={isSyncing}
-            onClick={() => onCompleteAndSync(note)}
-            className="w-full py-3.5 px-4 rounded-xl bg-brand-neon hover:bg-green-400 active:scale-98 text-dark-950 font-bold text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-neon/20"
+            onClick={handleFinish}
+            className="w-full py-3.5 px-4 rounded-xl bg-brand-neon hover:bg-green-400 active:scale-98 text-dark-950 font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-neon/20"
           >
-            <Activity className="w-4 h-4 stroke-[2.5]" />
-            <span>{isSyncing ? '同期処理中...' : '保存 ＆ ヘルスケア同期'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onCompleteLocalOnly(note)}
-            className="w-full py-2.5 px-4 rounded-xl bg-dark-800 hover:bg-dark-750 active:scale-98 text-xs font-semibold text-slate-300 transition-all flex items-center justify-center gap-1.5 border border-dark-700"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span>ローカル保存のみで完了</span>
+            <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+            <span>{isSyncing ? '同期保存中...' : 'ワークアウトを保存して終了'}</span>
           </button>
         </div>
       </div>
