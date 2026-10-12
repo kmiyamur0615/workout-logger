@@ -289,6 +289,7 @@ export function App() {
             cardioTypes={cardioTypes}
             cardioLogs={cardioLogs}
             userProfile={settings.profile}
+            settings={settings}
             cardioShortcutName={settings.cardioShortcutName || 'CardioLoggerSync'}
             onSaveCardioLog={handleSaveCardioLog}
             onAddCardioType={handleAddCardioType}

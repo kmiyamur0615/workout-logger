@@ -1,4 +1,4 @@
-import { WorkoutSession, CardioLog } from '../types';
+import { WorkoutSession, CardioLog, AppSettings } from '../types';
 
 export const HealthSyncService = {
   // 筋トレ用ショートカット呼び出しURLの生成
@@ -27,6 +27,37 @@ export const HealthSyncService = {
     window.location.href = url;
   },
 
+  // 種別（ランニング、サイクリング、ウォーキング等）に応じたショートカット名を解決
+  getCardioShortcutName(cardioTypeId: string, cardioTypeName: string, settings?: Partial<AppSettings>): string {
+    const custom = settings?.cardioShortcuts;
+    const nameLower = (cardioTypeName || '').toLowerCase();
+    const idLower = (cardioTypeId || '').toLowerCase();
+
+    // ランニング判定 (IDまたは種別名に run / ランニング)
+    if (idLower.includes('run') || nameLower.includes('ランニング') || nameLower.includes('run')) {
+      return custom?.run || 'CardioSync_Run';
+    }
+
+    // サイクリング判定 (IDまたは種別名に cycle / bike / サイクリング / 自転車)
+    if (
+      idLower.includes('cycle') ||
+      idLower.includes('bike') ||
+      nameLower.includes('サイクリング') ||
+      nameLower.includes('バイク') ||
+      nameLower.includes('自転車')
+    ) {
+      return custom?.cycle || 'CardioSync_Cycle';
+    }
+
+    // ウォーキング判定 (IDまたは種別名に walk / ウォーキング / 散歩)
+    if (idLower.includes('walk') || nameLower.includes('ウォーキング') || nameLower.includes('歩行') || nameLower.includes('散歩')) {
+      return custom?.walk || 'CardioSync_Walk';
+    }
+
+    // その他・カスタム種目は共通フォールバック
+    return settings?.cardioShortcutName || 'CardioLoggerSync';
+  },
+
   // 有酸素運動用ショートカット呼び出しURLの生成
   buildCardioShortcutUrl(log: CardioLog, shortcutName: string = 'CardioLoggerSync'): string {
     const endedAt = new Date(log.endedAt);
@@ -34,6 +65,7 @@ export const HealthSyncService = {
 
     const payload = {
       workoutCategory: "cardio",
+      cardioTypeId: log.cardioTypeId,
       cardioTypeName: log.cardioTypeName,
       startDate: startedAt.toISOString(),
       endDate: endedAt.toISOString(),

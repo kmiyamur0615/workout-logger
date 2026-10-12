@@ -54,6 +54,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [gasUrl, setGasUrl] = useState(settings.gasWebAppUrl);
   const [shortcutName, setShortcutName] = useState(settings.appleShortcutName);
   const [cardioShortcutName, setCardioShortcutName] = useState(settings.cardioShortcutName || 'CardioLoggerSync');
+  const [runShortcut, setRunShortcut] = useState(settings.cardioShortcuts?.run || 'CardioSync_Run');
+  const [cycleShortcut, setCycleShortcut] = useState(settings.cardioShortcuts?.cycle || 'CardioSync_Cycle');
+  const [walkShortcut, setWalkShortcut] = useState(settings.cardioShortcuts?.walk || 'CardioSync_Walk');
   const [isSaved, setIsSaved] = useState(false);
 
   // 有酸素種別追加
@@ -85,6 +88,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       gasWebAppUrl: gasUrl.trim(),
       appleShortcutName: shortcutName.trim() || 'WorkoutLoggerSync',
       cardioShortcutName: cardioShortcutName.trim() || 'CardioLoggerSync',
+      cardioShortcuts: {
+        run: runShortcut.trim() || 'CardioSync_Run',
+        cycle: cycleShortcut.trim() || 'CardioSync_Cycle',
+        walk: walkShortcut.trim() || 'CardioSync_Walk',
+      },
     };
     onSaveSettings(updated);
     setIsSaved(true);
@@ -407,7 +415,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           <span>スプレッドシートから最新マスタを取得</span>
         </button>
 
-        <div className="pt-2 border-t border-dark-800 space-y-2.5">
+        <div className="pt-2 border-t border-dark-800 space-y-3">
           <div>
             <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
               <Smartphone className="w-3.5 h-3.5 text-brand-neon" />
@@ -422,18 +430,68 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             />
           </div>
 
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
-              <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-              <span>有酸素書き込みショートカット名</span>
-            </label>
-            <input
-              type="text"
-              value={cardioShortcutName}
-              onChange={(e) => setCardioShortcutName(e.target.value)}
-              placeholder="CardioLoggerSync"
-              className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-neon font-mono"
-            />
+          <div className="bg-dark-900/80 rounded-2xl p-3 border border-dark-750 space-y-2.5">
+            <div className="flex items-center gap-1.5 text-amber-400">
+              <Smartphone className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-bold">有酸素運動ショートカット（種別別連携）</span>
+            </div>
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              Appleヘルスケア側で「ランニング」「屋外サイクリング」「屋外ウォーキング」を正確に区別して記録するために、種別ごとのショートカットを指定できます。
+            </p>
+
+            <div className="grid grid-cols-1 gap-2 pt-1">
+              <div>
+                <label className="block text-[10px] text-slate-300 mb-0.5 flex items-center gap-1">
+                  <span>🏃‍♂️ ランニング用ショートカット</span>
+                </label>
+                <input
+                  type="text"
+                  value={runShortcut}
+                  onChange={(e) => setRunShortcut(e.target.value)}
+                  placeholder="CardioSync_Run"
+                  className="w-full bg-dark-800 border border-dark-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-slate-300 mb-0.5 flex items-center gap-1">
+                  <span>🚴‍♂️ サイクリング用ショートカット</span>
+                </label>
+                <input
+                  type="text"
+                  value={cycleShortcut}
+                  onChange={(e) => setCycleShortcut(e.target.value)}
+                  placeholder="CardioSync_Cycle"
+                  className="w-full bg-dark-800 border border-dark-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-slate-300 mb-0.5 flex items-center gap-1">
+                  <span>🚶‍♂️ ウォーキング用ショートカット</span>
+                </label>
+                <input
+                  type="text"
+                  value={walkShortcut}
+                  onChange={(e) => setWalkShortcut(e.target.value)}
+                  placeholder="CardioSync_Walk"
+                  className="w-full bg-dark-800 border border-dark-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-slate-400 mb-0.5 flex items-center gap-1">
+                  <span>⚡ その他・カスタム種別用 (フォールバック)</span>
+                </label>
+                <input
+                  type="text"
+                  value={cardioShortcutName}
+                  onChange={(e) => setCardioShortcutName(e.target.value)}
+                  placeholder="CardioLoggerSync"
+                  className="w-full bg-dark-800 border border-dark-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-amber-400 font-mono"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>

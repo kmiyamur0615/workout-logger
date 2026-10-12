@@ -110,6 +110,11 @@ export const INITIAL_SETTINGS: AppSettings = {
   gasWebAppUrl: '',
   appleShortcutName: 'WorkoutLoggerSync',
   cardioShortcutName: 'CardioLoggerSync',
+  cardioShortcuts: {
+    run: 'CardioSync_Run',
+    cycle: 'CardioSync_Cycle',
+    walk: 'CardioSync_Walk',
+  },
   weightUnit: 'kg',
   hapticsEnabled: true,
   autoSyncGAS: true,

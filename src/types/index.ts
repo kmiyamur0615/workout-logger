@@ -123,11 +123,18 @@ export interface UserProfile {
   weightUpdatedAt?: string;
 }
 
+export interface CardioShortcutsConfig {
+  run?: string;
+  cycle?: string;
+  walk?: string;
+}
+
 export interface AppSettings {
   profile: UserProfile;
   gasWebAppUrl: string;
   appleShortcutName: string;
   cardioShortcutName?: string;
+  cardioShortcuts?: CardioShortcutsConfig;
   weightUnit: 'kg' | 'lb';
   hapticsEnabled: boolean;
   autoSyncGAS: boolean;

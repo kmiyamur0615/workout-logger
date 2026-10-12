@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Activity, Flame, Plus, Check, Calendar, Trash2, Smartphone } from 'lucide-react';
-import { CardioType, CardioLog, UserProfile } from '../types';
+import { CardioType, CardioLog, UserProfile, AppSettings } from '../types';
 import { calculateCardioCalories } from '../services/calorieCalculator';
 import { HealthSyncService } from '../services/healthSync';
 
@@ -8,6 +8,7 @@ interface CardioPageProps {
   cardioTypes: CardioType[];
   cardioLogs: CardioLog[];
   userProfile: UserProfile;
+  settings?: AppSettings;
   cardioShortcutName?: string;
   onSaveCardioLog: (log: CardioLog) => void;
   onAddCardioType: (type: CardioType) => void;
@@ -18,6 +19,7 @@ export const CardioPage: React.FC<CardioPageProps> = ({
   cardioTypes,
   cardioLogs,
   userProfile,
+  settings,
   cardioShortcutName = 'CardioLoggerSync',
   onSaveCardioLog,
   onAddCardioType,
@@ -42,6 +44,13 @@ export const CardioPage: React.FC<CardioPageProps> = ({
   const currentType = cardioTypes.find(t => t.id === selectedTypeId) || cardioTypes[0];
   const distanceNum = parseFloat(distance) || 0;
   const durationNum = parseFloat(duration) || 0;
+
+  // 種別（ランニング/サイクリング/ウォーキング/その他）に応じたショートカット名
+  const targetShortcutName = HealthSyncService.getCardioShortcutName(
+    currentType?.id || '',
+    currentType?.name || '',
+    settings || { cardioShortcutName }
+  );
 
   const calculatedCalories = calculateCardioCalories({
     cardioTypeName: currentType?.name || '',
@@ -75,7 +84,7 @@ export const CardioPage: React.FC<CardioPageProps> = ({
     setIsSavedSuccess(true);
 
     if (syncToHealth) {
-      HealthSyncService.triggerCardioShortcut(newLog, cardioShortcutName);
+      HealthSyncService.triggerCardioShortcut(newLog, targetShortcutName);
     }
 
     setTimeout(() => setIsSavedSuccess(false), 2000);
@@ -253,8 +262,19 @@ export const CardioPage: React.FC<CardioPageProps> = ({
             className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-98 text-dark-950 font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-xl shadow-amber-500/30"
           >
             <Smartphone className="w-4 h-4 stroke-[2.5]" />
-            <span>{isSavedSuccess ? '記録を保存しました！' : '保存してAppleヘルスケアに同期'}</span>
+            <span>
+              {isSavedSuccess
+                ? '記録を保存しました！'
+                : `保存してAppleヘルスケアに同期 (${currentType?.name || '有酸素'})`}
+            </span>
           </button>
+          <div className="px-1 text-center">
+            <span className="text-[10px] text-slate-400">
+              ※iOSヘルスケアに種別「{currentType?.name}」で記録するため、ショートカット「
+              <span className="text-amber-400 font-mono font-bold">{targetShortcutName}</span>
+              」を実行します
+            </span>
+          </div>
           <button
             type="button"
             onClick={() => handleSave(false)}

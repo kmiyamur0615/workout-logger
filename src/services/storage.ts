@@ -124,9 +124,18 @@ export const StorageService = {
   // 設定
   getSettings(): AppSettings {
     const s = getStored<AppSettings>(KEYS.SETTINGS, INITIAL_SETTINGS);
+    let changed = false;
     // profileフィールドが存在しない場合のマイグレーション
     if (!s.profile) {
       s.profile = INITIAL_SETTINGS.profile;
+      changed = true;
+    }
+    // cardioShortcutsフィールドが存在しない場合のマイグレーション
+    if (!s.cardioShortcuts) {
+      s.cardioShortcuts = INITIAL_SETTINGS.cardioShortcuts;
+      changed = true;
+    }
+    if (changed) {
       this.saveSettings(s);
     }
     return s;
