@@ -50,17 +50,17 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   return (
     <div className="pb-24 px-4 pt-4 max-w-lg mx-auto space-y-5 animate-in fade-in duration-150">
-      {/* 実行中セッションバナー */}
+      {/* 本日の記録バナー */}
       {hasActiveSession && (
         <div 
           onClick={onNavigateToWorkout}
           className="bg-brand-neon/15 border-2 border-brand-neon rounded-2xl p-3.5 flex items-center justify-between cursor-pointer active:scale-98 transition-all shadow-lg shadow-brand-neon/10"
         >
           <div className="flex items-center gap-2.5">
-            <span className="w-3 h-3 rounded-full bg-brand-neon animate-ping" />
+            <span className="w-3 h-3 rounded-full bg-brand-neon animate-pulse" />
             <div>
-              <div className="text-xs font-bold text-brand-neon tracking-wide">ワークアウトが進行中</div>
-              <div className="text-[11px] text-slate-300">タップして記録画面へ戻る</div>
+              <div className="text-xs font-bold text-brand-neon tracking-wide">本日の筋トレ記録あり（自動保存済み）</div>
+              <div className="text-[11px] text-slate-300">タップして本日の記録シートを開く</div>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-brand-neon" />
@@ -96,7 +96,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               className="w-full py-3.5 px-4 rounded-2xl bg-brand-neon hover:bg-green-400 active:scale-98 text-dark-950 font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-xl shadow-brand-neon/25"
             >
               <Play className="w-4 h-4 fill-dark-950 stroke-none" />
-              <span>筋トレを開始</span>
+              <span>このメニューで記録する</span>
             </button>
 
             {/* サブアクション */}
@@ -106,14 +106,14 @@ export const HomePage: React.FC<HomePageProps> = ({
                 onClick={() => setIsSelectMenuOpen(true)}
                 className="text-slate-400 hover:text-white transition-colors"
               >
-                メニューを変更
+                別メニューを選ぶ
               </button>
               <button
                 type="button"
                 onClick={() => onStartSession()}
                 className="text-slate-400 hover:text-brand-neon font-medium transition-colors"
               >
-                フリー開始 →
+                種目を自由に追加 →
               </button>
             </div>
           </div>
@@ -139,7 +139,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                 onClick={() => onStartSession()}
                 className="py-3 px-3 rounded-xl bg-brand-neon/15 hover:bg-brand-neon/25 active:scale-98 text-brand-neon font-bold text-xs transition-all flex items-center justify-center gap-1.5 border border-brand-neon/30"
               >
-                <span>フリー開始</span>
+                <span>種目を自由に追加</span>
               </button>
             </div>
           </div>

@@ -50,14 +50,17 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
           <div className="w-14 h-14 rounded-2xl bg-brand-neon/20 border border-brand-accent/50 mx-auto flex items-center justify-center mb-3">
             <CheckCircle2 className="w-8 h-8 text-brand-neon" />
           </div>
-          <h2 className="text-lg font-bold text-white tracking-tight">ワークアウトを完了</h2>
-          <p className="text-xs text-slate-400 mt-0.5">{session.menuName || 'フリーワークアウト'}</p>
+          <h2 className="text-lg font-bold text-white tracking-tight">ヘルスケア・シート連携</h2>
+          <p className="text-xs text-slate-400 mt-1">
+            アプリ内への記録は<span className="text-brand-neon font-bold">自動保存済み</span>です。<br />
+            AppleヘルスケアやGoogleスプレッドシートへ送信します。
+          </p>
         </div>
 
         {/* 実施サマリー */}
         <div className="grid grid-cols-2 gap-2 bg-dark-850 p-3 rounded-2xl border border-dark-800 mb-4 text-center">
           <div>
-            <div className="text-[10px] text-slate-400 font-medium">実施種目数</div>
+            <div className="text-[10px] text-slate-400 font-medium">本日の種目数</div>
             <div className="text-base font-bold text-white font-mono mt-0.5">
               {totalExercises} <span className="text-[10px] font-normal text-slate-400">種目</span>
             </div>
@@ -73,7 +76,7 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
         {/* メモ入力 */}
         <div className="mb-4">
           <label className="block text-xs font-semibold text-slate-300 mb-1">
-            セッションメモ (任意)
+            本日のメモ (任意)
           </label>
           <textarea
             value={note}
@@ -89,7 +92,7 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
           <div className="flex items-center justify-between px-2 py-1 bg-dark-850 rounded-xl border border-dark-800">
             <div className="flex items-center gap-2">
               <Activity className={`w-4 h-4 transition-colors ${syncExternal ? 'text-brand-neon' : 'text-slate-500'}`} />
-              <span className="text-xs font-medium text-slate-300">ヘルスケア ＆ スプレッドシート連携</span>
+              <span className="text-xs font-medium text-slate-300">ヘルスケア ＆ スプレッドシート送信</span>
             </div>
             <button
               type="button"
@@ -107,7 +110,7 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
             </button>
           </div>
 
-          {/* メイン完了ボタン */}
+          {/* メイン送信ボタン */}
           <button
             type="button"
             disabled={isSyncing}
@@ -115,7 +118,7 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
             className="w-full py-3.5 px-4 rounded-xl bg-brand-neon hover:bg-green-400 active:scale-98 text-dark-950 font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-neon/20"
           >
             <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-            <span>{isSyncing ? '同期保存中...' : 'ワークアウトを保存して終了'}</span>
+            <span>{isSyncing ? '送信中...' : syncExternal ? '外部連携を実行する' : 'メモを保存して閉じる'}</span>
           </button>
         </div>
       </div>

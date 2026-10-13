@@ -15,8 +15,17 @@ import {
   Dumbbell,
   Edit3
 } from 'lucide-react';
-import { AppSettings, CardioType, RoutineMenu, WeekdaySchedule, Exercise, DayOfWeek } from '../types';
+import { AppSettings, CardioType, RoutineMenu, WeekdaySchedule, Exercise, DayOfWeek, BodyPart, EquipmentType } from '../types';
 import { StorageService } from '../services/storage';
+
+const EQUIPMENT_LABELS: Record<EquipmentType, string> = {
+  BARBELL: 'バーベル',
+  DUMBBELL: 'ダンベル',
+  MACHINE: 'マシン',
+  CABLE: 'ケーブル',
+  BODYWEIGHT: '自重',
+  OTHER: 'その他',
+};
 
 interface SettingsPageProps {
   settings: AppSettings;
@@ -24,7 +33,10 @@ interface SettingsPageProps {
   routineMenus: RoutineMenu[];
   schedule: WeekdaySchedule[];
   exercises: Exercise[];
+  bodyParts: BodyPart[];
   onSaveSettings: (settings: AppSettings) => void;
+  onAddExercise: (exercise: Exercise) => void;
+  onDeleteExercise: (exerciseId: string) => void;
   onAddCardioType: (type: CardioType) => void;
   onDeleteCardioType: (typeId: string) => void;
   onUpdateSchedule: (newSchedule: WeekdaySchedule[]) => void;
@@ -40,7 +52,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   routineMenus,
   schedule,
   exercises,
+  bodyParts,
   onSaveSettings,
+  onAddExercise,
+  onDeleteExercise,
   onAddCardioType,
   onDeleteCardioType,
   onUpdateSchedule,
@@ -60,6 +75,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [hapticsEnabled, setHapticsEnabled] = useState(settings.hapticsEnabled ?? true);
   const [isSaved, setIsSaved] = useState(false);
 
+  // 筋トレ種目追加
+  const [exerciseFilterPart, setExerciseFilterPart] = useState<string>('all');
+  const [newExerciseName, setNewExerciseName] = useState('');
+  const [newExercisePart, setNewExercisePart] = useState<string>('chest');
+  const [newExerciseEquipment, setNewExerciseEquipment] = useState<EquipmentType>('MACHINE');
+
   // 有酸素種別追加
   const [newTypeName, setNewTypeName] = useState('');
   const [newTypeMets, setNewTypeMets] = useState('7.0');
@@ -67,6 +88,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   // メニュー編集モーダル状態
   const [editingMenu, setEditingMenu] = useState<RoutineMenu | null>(null);
   const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
+  const [isCreatingExInMenu, setIsCreatingExInMenu] = useState(false);
 
   const weekdays: { day: DayOfWeek; name: string }[] = [
     { day: 1, name: '月曜日' },
@@ -157,6 +179,25 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     const updated = [...editingMenu.exercises];
     updated.splice(idx, 1);
     setEditingMenu({ ...editingMenu, exercises: updated });
+  };
+
+  const handleCreateNewExercise = (andAddToMenu = false) => {
+    const trimmed = newExerciseName.trim();
+    if (!trimmed) return;
+    const newEx: Exercise = {
+      id: `ex-custom-${Date.now()}`,
+      bodyPartId: newExercisePart,
+      name: trimmed,
+      equipment: newExerciseEquipment,
+      isCustom: true,
+    };
+    onAddExercise(newEx);
+    setNewExerciseName('');
+
+    if (andAddToMenu && editingMenu) {
+      handleAddExerciseToEditingMenu(newEx.id);
+      setIsCreatingExInMenu(false);
+    }
   };
 
   const handleCreateNewCardioType = () => {
@@ -275,6 +316,121 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* 2.5 筋トレ種目の管理（追加・削除） */}
+      <div className="bg-dark-850 border border-dark-800 rounded-3xl p-5 shadow-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Dumbbell className="w-4 h-4 text-brand-neon" />
+            <h3 className="text-sm font-bold text-white">筋トレ種目の管理</h3>
+          </div>
+          <span className="text-[11px] text-slate-400 font-mono">{exercises.length}種目</span>
+        </div>
+
+        {/* 新規筋トレ種目追加フォーム */}
+        <div className="p-3 rounded-2xl bg-dark-900/70 border border-dark-800 space-y-2.5">
+          <div className="text-[11px] font-bold text-brand-neon">新しい筋トレ種目を追加</div>
+          <input
+            type="text"
+            value={newExerciseName}
+            onChange={(e) => setNewExerciseName(e.target.value)}
+            placeholder="種目名 (例: ペックフライ、チンニング)"
+            className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-neon"
+          />
+          <div className="flex items-center gap-2">
+            <select
+              value={newExercisePart}
+              onChange={(e) => setNewExercisePart(e.target.value)}
+              className="flex-1 bg-dark-800 border border-dark-700 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-brand-neon"
+            >
+              {bodyParts.map(bp => (
+                <option key={bp.id} value={bp.id}>{bp.name}</option>
+              ))}
+            </select>
+            <select
+              value={newExerciseEquipment}
+              onChange={(e) => setNewExerciseEquipment(e.target.value as EquipmentType)}
+              className="flex-1 bg-dark-800 border border-dark-700 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-brand-neon"
+            >
+              {(Object.keys(EQUIPMENT_LABELS) as EquipmentType[]).map(eq => (
+                <option key={eq} value={eq}>{EQUIPMENT_LABELS[eq]}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={!newExerciseName.trim()}
+              onClick={() => handleCreateNewExercise(false)}
+              className="px-3.5 py-2 rounded-xl bg-brand-neon disabled:opacity-40 text-dark-950 font-black text-xs active:scale-95 transition-all flex items-center gap-1 shrink-0 shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[3]" />
+              <span>追加</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 部位別フィルター */}
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => setExerciseFilterPart('all')}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
+              exerciseFilterPart === 'all' ? 'bg-brand-neon text-dark-950' : 'bg-dark-800 text-slate-300'
+            }`}
+          >
+            すべて
+          </button>
+          {bodyParts.map(bp => (
+            <button
+              key={bp.id}
+              type="button"
+              onClick={() => {
+                setExerciseFilterPart(bp.id);
+                setNewExercisePart(bp.id);
+              }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
+                exerciseFilterPart === bp.id ? 'bg-brand-neon text-dark-950' : 'bg-dark-800 text-slate-300'
+              }`}
+            >
+              {bp.name}
+            </button>
+          ))}
+        </div>
+
+        {/* 登録種目一覧 */}
+        <div className="space-y-1.5 max-h-60 overflow-y-auto pr-0.5">
+          {exercises
+            .filter(ex => exerciseFilterPart === 'all' || ex.bodyPartId === exerciseFilterPart)
+            .map((ex) => {
+              const bpName = bodyParts.find(b => b.id === ex.bodyPartId)?.name || ex.bodyPartId;
+              return (
+                <div
+                  key={ex.id}
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-dark-900/60 border border-dark-800 text-xs"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="px-1.5 py-0.5 rounded bg-dark-800 text-slate-300 text-[10px] font-semibold shrink-0">
+                      {bpName}
+                    </span>
+                    <span className="font-bold text-slate-100 truncate">{ex.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <span className="text-[10px] text-slate-400">
+                      {EQUIPMENT_LABELS[ex.equipment] || ex.equipment}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteExercise(ex.id)}
+                      className="text-slate-500 hover:text-red-400 p-1 rounded-lg hover:bg-dark-800 transition-colors"
+                      title="種目を削除"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
         </div>
       </div>
 
@@ -630,11 +786,73 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   defaultValue=""
                   className="w-full bg-dark-800 border border-dashed border-dark-600 rounded-xl px-3 py-2 text-xs text-brand-neon focus:outline-none"
                 >
-                  <option value="" disabled>+ 種目を追加する</option>
+                  <option value="" disabled>+ 既存の種目から追加する</option>
                   {exercises.map(e => (
                     <option key={e.id} value={e.id}>{e.name}</option>
                   ))}
                 </select>
+
+                {/* メニュー編集中の新規種目作成トグル */}
+                <div className="mt-2">
+                  {!isCreatingExInMenu ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingExInMenu(true)}
+                      className="text-[11px] text-brand-neon hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>新しい種目を作成して追加</span>
+                    </button>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-dark-800 border border-brand-neon/30 space-y-2 mt-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-brand-neon">新規種目を作成</span>
+                        <button
+                          type="button"
+                          onClick={() => setIsCreatingExInMenu(false)}
+                          className="text-[10px] text-slate-400 hover:text-white"
+                        >
+                          閉じる
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={newExerciseName}
+                        onChange={(e) => setNewExerciseName(e.target.value)}
+                        placeholder="種目名 (例: ペックフライ)"
+                        className="w-full bg-dark-900 border border-dark-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-neon"
+                      />
+                      <div className="flex items-center gap-1.5">
+                        <select
+                          value={newExercisePart}
+                          onChange={(e) => setNewExercisePart(e.target.value)}
+                          className="flex-1 bg-dark-900 border border-dark-700 rounded-lg px-2 py-1.5 text-xs text-white"
+                        >
+                          {bodyParts.map(bp => (
+                            <option key={bp.id} value={bp.id}>{bp.name}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={newExerciseEquipment}
+                          onChange={(e) => setNewExerciseEquipment(e.target.value as EquipmentType)}
+                          className="flex-1 bg-dark-900 border border-dark-700 rounded-lg px-2 py-1.5 text-xs text-white"
+                        >
+                          {(Object.keys(EQUIPMENT_LABELS) as EquipmentType[]).map(eq => (
+                            <option key={eq} value={eq}>{EQUIPMENT_LABELS[eq]}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={!newExerciseName.trim()}
+                          onClick={() => handleCreateNewExercise(true)}
+                          className="px-3 py-1.5 rounded-lg bg-brand-neon disabled:opacity-40 text-dark-950 font-bold text-xs shrink-0"
+                        >
+                          追加
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Play, Dumbbell, Sparkles } from 'lucide-react';
 import { Header } from './components/Header';
 import { Navigation, TabType } from './components/Navigation';
 import { HomePage } from './pages/HomePage';
@@ -23,7 +22,9 @@ import {
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('home');
-  const [activeSession, setActiveSession] = useState<WorkoutSession | null>(null);
+  const [activeSession, setActiveSession] = useState<WorkoutSession>(() =>
+    StorageService.getOrCreateTodaySession()
+  );
 
   // マスタ & 履歴データ
   const [bodyParts, setBodyParts] = useState<BodyPart[]>([]);
@@ -51,60 +52,72 @@ export function App() {
     setPastSessions(StorageService.getPastSessions());
     setCardioTypes(StorageService.getCardioTypes());
     setCardioLogs(StorageService.getCardioLogs());
-    setActiveSession(StorageService.getActiveSession());
+    setActiveSession(StorageService.getOrCreateTodaySession());
     setSettings(StorageService.getSettings());
   }, []);
 
-  // ワークアウトの開始
+  // ルーティンメニューを今日のシートに読み込む / 筋トレタブへ遷移
   const handleStartSession = (menuId?: string) => {
-    const selectedMenu = menuId ? routineMenus.find(m => m.id === menuId) : null;
-    const nowIso = new Date().toISOString();
+    if (menuId) {
+      handleLoadMenuIntoToday(menuId);
+    }
+    setCurrentTab('workout');
+  };
 
-    let initialExercises: WorkoutExercise[] = [];
-    if (selectedMenu) {
-      initialExercises = selectedMenu.exercises.map((item, idx) => {
+  // 指定したメニューの種目を本日のワークアウトシートへ追加（すでに存在する種目は重複追加しない）
+  const handleLoadMenuIntoToday = (menuId: string) => {
+    const selectedMenu = routineMenus.find(m => m.id === menuId);
+    if (!selectedMenu) return;
+
+    const currentSession = StorageService.getOrCreateTodaySession();
+    const existingExerciseIds = new Set(currentSession.exercises.map(e => e.exerciseId));
+
+    const addedExercises: WorkoutExercise[] = selectedMenu.exercises
+      .filter(item => !existingExerciseIds.has(item.exerciseId))
+      .map((item, idx) => {
         const exMaster = exercises.find(e => e.id === item.exerciseId);
+        const prevLog = StorageService.getPreviousLogsForExercise(item.exerciseId);
         return {
           id: `we-${Date.now()}-${idx}`,
           exerciseId: item.exerciseId,
           exerciseName: exMaster?.name || '種目',
           bodyPartId: exMaster?.bodyPartId || 'chest',
-          orderIndex: idx + 1,
-          sets: Array.from({ length: item.targetSets }).map((_, sIdx) => ({
-            id: `s-${Date.now()}-${idx}-${sIdx}`,
-            setNumber: sIdx + 1,
-            weight: item.targetWeight || 0,
-            reps: item.targetReps || 10,
-            isAssisted: false,
-            isCompleted: false,
-          }))
+          orderIndex: currentSession.exercises.length + idx + 1,
+          sets: Array.from({ length: item.targetSets }).map((_, sIdx) => {
+            const prevSet = prevLog?.sets?.[sIdx] || prevLog?.sets?.[0];
+            return {
+              id: `s-${Date.now()}-${idx}-${sIdx}`,
+              setNumber: sIdx + 1,
+              weight: prevSet ? prevSet.weight : (item.targetWeight || 0),
+              reps: prevSet ? prevSet.reps : (item.targetReps || 10),
+              isAssisted: false,
+              isCompleted: false,
+            };
+          })
         };
       });
-    }
 
-    const newSession: WorkoutSession = {
-      id: `session-${Date.now()}`,
-      startedAt: nowIso,
-      menuId: selectedMenu?.id,
-      menuName: selectedMenu ? selectedMenu.name : 'フリーワークアウト',
-      exercises: initialExercises,
+    const updatedSession: WorkoutSession = {
+      ...currentSession,
+      menuId: selectedMenu.id,
+      menuName: selectedMenu.name,
+      exercises: [...currentSession.exercises, ...addedExercises],
     };
 
-    setActiveSession(newSession);
-    StorageService.saveActiveSession(newSession);
-    setCurrentTab('workout');
+    handleUpdateSession(updatedSession);
   };
 
+  // 本日のシート更新（リアルタイム自動保存）
   const handleUpdateSession = (updated: WorkoutSession) => {
     setActiveSession(updated);
-    StorageService.saveActiveSession(updated);
-  };
-
-  const handleFinishSession = (_completed: WorkoutSession) => {
-    setActiveSession(null);
+    StorageService.saveTodaySession(updated);
     setPastSessions(StorageService.getPastSessions());
     setBodyParts(StorageService.getBodyParts());
-    setCurrentTab('history');
+  };
+
+  // 外部連携完了時
+  const handleFinishSession = (synced: WorkoutSession) => {
+    handleUpdateSession(synced);
   };
 
   // スプレッドシート同期
@@ -120,8 +133,15 @@ export function App() {
       const data = await GasApiService.fetchSpreadsheetData(settings.gasWebAppUrl);
       if (data) {
         if (data.exercises) {
-          StorageService.saveExercises(data.exercises);
-          setExercises(data.exercises);
+          // ローカルで追加したカスタム種目が消えないようにマージ
+          const remoteIds = new Set(data.exercises.map((e: Exercise) => e.id));
+          const remoteNames = new Set(data.exercises.map((e: Exercise) => e.name));
+          const localCustom = exercises.filter(
+            e => e.isCustom && !remoteIds.has(e.id) && !remoteNames.has(e.name)
+          );
+          const mergedExercises = [...data.exercises, ...localCustom];
+          StorageService.saveExercises(mergedExercises);
+          setExercises(mergedExercises);
         }
         if (data.schedule) {
           StorageService.saveSchedule(data.schedule);
@@ -134,6 +154,22 @@ export function App() {
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  // 種目マスタ操作
+  const handleAddExercise = (exercise: Exercise) => {
+    StorageService.addExercise(exercise);
+    setExercises(StorageService.getExercises());
+    if (settings.gasWebAppUrl) {
+      GasApiService.syncNewExercise(settings.gasWebAppUrl, exercise).catch(err =>
+        console.error('GASへの種目追加同期に失敗:', err)
+      );
+    }
+  };
+
+  const handleDeleteExerciseMaster = (exerciseId: string) => {
+    StorageService.deleteExercise(exerciseId);
+    setExercises(StorageService.getExercises());
   };
 
   // メニュー操作
@@ -157,11 +193,13 @@ export function App() {
     const updated = pastSessions.filter(s => s.id !== sessionId);
     StorageService.savePastSessions(updated);
     setPastSessions(updated);
+    setActiveSession(StorageService.getOrCreateTodaySession());
   };
 
   const handleUpdatePastSession = (session: WorkoutSession) => {
     StorageService.updatePastSession(session);
     setPastSessions(StorageService.getPastSessions());
+    setActiveSession(StorageService.getOrCreateTodaySession());
   };
 
   // 有酸素運動操作
@@ -191,12 +229,14 @@ export function App() {
     setCardioTypes(StorageService.getCardioTypes());
   };
 
+  const hasTodayExercises = activeSession.exercises.length > 0;
+
   return (
     <div className="min-h-screen bg-dark-900 text-slate-100 flex flex-col font-sans">
       <Header
         onSyncGAS={handleSyncGAS}
         isSyncing={isSyncing}
-        activeSessionName={activeSession ? (activeSession.menuName || 'ワークアウト') : undefined}
+        activeSessionName={hasTodayExercises ? `${activeSession.exercises.length}種目 記録済み` : undefined}
       />
 
       <main className="flex-1">
@@ -208,90 +248,23 @@ export function App() {
             pastSessions={pastSessions}
             onStartSession={handleStartSession}
             onNavigateToWorkout={() => setCurrentTab('workout')}
-            hasActiveSession={!!activeSession}
+            hasActiveSession={hasTodayExercises}
             onNavigateToCardio={() => setCurrentTab('cardio')}
             onNavigateToSettings={() => setCurrentTab('settings')}
           />
         )}
 
         {currentTab === 'workout' && (
-          activeSession ? (
-            <WorkoutPage
-              session={activeSession}
-              onUpdateSession={handleUpdateSession}
-              onFinishSession={handleFinishSession}
-              exercises={exercises}
-              bodyParts={bodyParts}
-            />
-          ) : (
-            <div className="pb-24 px-4 pt-4 max-w-lg mx-auto space-y-4 animate-in fade-in duration-150">
-              <div className="text-center py-6 px-4 bg-dark-850 border border-dark-800 rounded-3xl">
-                <div className="w-14 h-14 rounded-2xl bg-brand-neon/15 border border-brand-neon/30 mx-auto flex items-center justify-center mb-3">
-                  <Dumbbell className="w-7 h-7 text-brand-neon" />
-                </div>
-                <h2 className="text-base font-bold text-white mb-1">
-                  筋トレを開始する
-                </h2>
-                <p className="text-xs text-slate-400 max-w-xs mx-auto mb-4">
-                  今日のメニューまたは登録ルーティンを選んでワークアウトを記録しましょう
-                </p>
-                <button
-                  type="button"
-                  onClick={() => handleStartSession()}
-                  className="w-full py-3.5 rounded-2xl bg-brand-neon hover:bg-green-400 active:scale-98 text-dark-950 font-black text-sm shadow-lg shadow-brand-neon/20 transition-all flex items-center justify-center gap-2"
-                >
-                  <Play className="w-4 h-4 fill-dark-950 stroke-none" />
-                  <span>フリーワークアウト開始</span>
-                </button>
-              </div>
-
-              {/* 登録ルーティン一覧から開始 */}
-              <div className="bg-dark-850 border border-dark-800 rounded-3xl p-4 shadow-lg">
-                <div className="flex items-center justify-between mb-3 px-1">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-brand-neon" />
-                    <h3 className="text-sm font-bold text-white">メニューから開始</h3>
-                  </div>
-                  <button
-                    onClick={() => setCurrentTab('settings')}
-                    className="text-[11px] text-slate-400 hover:text-brand-neon transition-colors"
-                  >
-                    メニュー作成・編集 →
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  {routineMenus.length === 0 ? (
-                    <div className="text-center py-6 text-xs text-slate-500">
-                      メニューが登録されていません。「設定」から作成できます。
-                    </div>
-                  ) : (
-                    routineMenus.map((menu) => (
-                      <div
-                        key={menu.id}
-                        className="p-3.5 rounded-2xl bg-dark-900 border border-dark-800 flex items-center justify-between hover:border-brand-neon/30 transition-all"
-                      >
-                        <div>
-                          <div className="text-sm font-bold text-white">{menu.name}</div>
-                          <div className="text-[11px] text-slate-400 mt-0.5">
-                            対象: {menu.targetParts} ({menu.exercises.length}種目)
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleStartSession(menu.id)}
-                          className="px-3.5 py-2 rounded-xl bg-brand-neon/15 hover:bg-brand-neon active:scale-95 text-brand-neon hover:text-dark-950 font-bold text-xs border border-brand-neon/30 hover:border-brand-neon transition-all flex items-center gap-1"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-current stroke-none" />
-                          <span>開始</span>
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          )
+          <WorkoutPage
+            session={activeSession}
+            onUpdateSession={handleUpdateSession}
+            onFinishSession={handleFinishSession}
+            exercises={exercises}
+            bodyParts={bodyParts}
+            routineMenus={routineMenus}
+            onLoadMenu={handleLoadMenuIntoToday}
+            onCreateExercise={handleAddExercise}
+          />
         )}
 
         {currentTab === 'cardio' && (
@@ -327,10 +300,13 @@ export function App() {
             routineMenus={routineMenus}
             schedule={schedule}
             exercises={exercises}
+            bodyParts={bodyParts}
             onSaveSettings={(s) => {
               StorageService.saveSettings(s);
               setSettings(s);
             }}
+            onAddExercise={handleAddExercise}
+            onDeleteExercise={handleDeleteExerciseMaster}
             onAddCardioType={handleAddCardioType}
             onDeleteCardioType={handleDeleteCardioType}
             onUpdateSchedule={handleUpdateSchedule}
@@ -345,7 +321,7 @@ export function App() {
       <Navigation
         currentTab={currentTab}
         onChangeTab={setCurrentTab}
-        hasActiveWorkout={!!activeSession}
+        hasActiveWorkout={hasTodayExercises}
         hapticsEnabled={settings.hapticsEnabled}
       />
     </div>

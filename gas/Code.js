@@ -198,6 +198,22 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // 新規筋トレ種目の追加
+    if (data.action === 'ADD_EXERCISE') {
+      const ex = data.exercise;
+      const exSheet = ss.getSheetByName('exercises') || ss.insertSheet('exercises');
+      exSheet.appendRow([
+        ex.id,
+        ex.bodyPartId,
+        ex.name,
+        ex.equipment || 'OTHER',
+        ex.note || ''
+      ]);
+
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     return ContentService.createTextOutput(JSON.stringify({ status: 'unknown_action' }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (error) {

@@ -1,4 +1,4 @@
-import { WorkoutSession, CardioLog } from '../types';
+import { WorkoutSession, CardioLog, Exercise } from '../types';
 
 export const GasApiService = {
   // スプレッドシートからマスタ取得 (doGet)
@@ -93,6 +93,31 @@ export const GasApiService = {
       return resJson.status === 'success';
     } catch (err) {
       console.error('GAS有酸素同期エラー:', err);
+      return false;
+    }
+  },
+
+  // 新規筋トレ種目の送信
+  async syncNewExercise(gasUrl: string, exercise: Exercise): Promise<boolean> {
+    if (!gasUrl) return false;
+
+    try {
+      const payload = {
+        action: 'ADD_EXERCISE',
+        exercise
+      };
+
+      const response = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) return false;
+      const resJson = await response.json();
+      return resJson.status === 'success';
+    } catch (err) {
+      console.error('GAS種目追加同期エラー:', err);
       return false;
     }
   }

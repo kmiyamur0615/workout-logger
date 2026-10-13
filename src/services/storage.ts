@@ -94,6 +94,10 @@ export const StorageService = {
     const list = this.getExercises();
     this.saveExercises([...list, exercise]);
   },
+  deleteExercise(exerciseId: string): void {
+    const list = this.getExercises().filter(e => e.id !== exerciseId);
+    this.saveExercises(list);
+  },
 
   // ルーティンメニュー
   getRoutineMenus(): RoutineMenu[] {
@@ -174,6 +178,15 @@ export const StorageService = {
     return null;
   },
 
+  // 日付キー生成 (YYYY-MM-DD)
+  getDateKey(dateOrIso?: Date | string): string {
+    const d = dateOrIso ? new Date(dateOrIso) : new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  },
+
   // ワークアウト履歴
   getPastSessions(): WorkoutSession[] {
     this.initMigration();
@@ -187,48 +200,95 @@ export const StorageService = {
     this.savePastSessions(sessions);
   },
   addCompletedSession(session: WorkoutSession): void {
-    const sessions = this.getPastSessions();
-    this.savePastSessions([session, ...sessions]);
-
-    // 部位ごとの最終トレーニング日時を更新
-    const trainedPartIds = new Set(session.exercises.map(e => e.bodyPartId));
-    const nowIso = session.endedAt || session.startedAt;
-    const parts = this.getBodyParts().map(part => {
-      if (trainedPartIds.has(part.id)) {
-        return { ...part, lastTrainedAt: nowIso };
-      }
-      return part;
-    });
-    this.saveBodyParts(parts);
+    this.saveTodaySession(session);
   },
 
-  // 実行中セッション
+  // 今日のワークアウトシートを取得（なければ空のシートを生成）
+  getOrCreateTodaySession(): WorkoutSession {
+    const todayKey = this.getDateKey();
+    const sessions = this.getPastSessions();
+
+    // 旧バージョンの実行中セッションが残っていれば引き継ぐ
+    const legacyActive = getStored<WorkoutSession | null>(KEYS.ACTIVE_SESSION, null);
+    if (legacyActive && legacyActive.exercises.length > 0) {
+      localStorage.removeItem(KEYS.ACTIVE_SESSION);
+      this.saveTodaySession(legacyActive);
+      return legacyActive;
+    }
+
+    const existingToday = sessions.find(s => this.getDateKey(s.startedAt) === todayKey);
+    if (existingToday) {
+      return existingToday;
+    }
+
+    return {
+      id: `session-${todayKey}`,
+      startedAt: new Date().toISOString(),
+      menuName: '本日の筋トレ',
+      exercises: [],
+    };
+  },
+
+  // 今日のワークアウトを自動保存（種目が1つ以上あれば履歴に自動保存、0なら履歴から除去）
+  saveTodaySession(session: WorkoutSession): void {
+    const targetDateKey = this.getDateKey(session.startedAt);
+    const sessions = this.getPastSessions();
+    const otherSessions = sessions.filter(
+      s => s.id !== session.id && this.getDateKey(s.startedAt) !== targetDateKey
+    );
+
+    if (session.exercises.length > 0) {
+      const updatedSession: WorkoutSession = {
+        ...session,
+        endedAt: new Date().toISOString(),
+      };
+      this.savePastSessions([updatedSession, ...otherSessions]);
+
+      // 部位ごとの最終トレーニング日時を更新
+      const trainedPartIds = new Set(session.exercises.map(e => e.bodyPartId));
+      const nowIso = updatedSession.endedAt || updatedSession.startedAt;
+      const parts = this.getBodyParts().map(part => {
+        if (trainedPartIds.has(part.id)) {
+          return { ...part, lastTrainedAt: nowIso };
+        }
+        return part;
+      });
+      this.saveBodyParts(parts);
+    } else {
+      this.savePastSessions(otherSessions);
+    }
+  },
+
+  // 実行中セッション（後方互換）
   getActiveSession(): WorkoutSession | null {
-    return getStored<WorkoutSession | null>(KEYS.ACTIVE_SESSION, null);
+    return this.getOrCreateTodaySession();
   },
   saveActiveSession(session: WorkoutSession | null): void {
-    setStored(KEYS.ACTIVE_SESSION, session);
+    if (session) this.saveTodaySession(session);
   },
   clearActiveSession(): void {
     localStorage.removeItem(KEYS.ACTIVE_SESSION);
   },
 
-  // 前回ログ（フロート表示用）
+  // 前回ログ（フロート表示用：今日の記録は除外して過去の実績を返す）
   getPreviousLogsForExercise(exerciseId: string): PreviousExerciseLog | null {
+    const todayKey = this.getDateKey();
     const sessions = this.getPastSessions();
     for (const session of sessions) {
+      if (this.getDateKey(session.startedAt) === todayKey) continue;
       const matchEx = session.exercises.find(e => e.exerciseId === exerciseId);
       if (matchEx && matchEx.sets.length > 0) {
-        return {
-          date: session.endedAt || session.startedAt,
-          sets: matchEx.sets
-            .filter(s => s.isCompleted || s.reps > 0)
-            .map(s => ({
+        const validSets = matchEx.sets.filter(s => s.isCompleted || s.reps > 0);
+        if (validSets.length > 0) {
+          return {
+            date: session.endedAt || session.startedAt,
+            sets: validSets.map(s => ({
               setNumber: s.setNumber,
               weight: s.weight,
               reps: s.reps,
             }))
-        };
+          };
+        }
       }
     }
     return null;
