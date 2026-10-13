@@ -504,7 +504,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
       {isAddExerciseOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <div className="bg-dark-900 border border-dark-700 w-full max-w-sm rounded-3xl p-4 shadow-2xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-dark-800">
+            <div className="flex items-center justify-between pb-3 border-b border-dark-800 shrink-0">
               <h3 className="font-bold text-white text-base">種目を選択</h3>
               <div className="flex items-center gap-2">
                 <button
@@ -515,7 +515,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
                     }
                     setIsCreatingExercise(!isCreatingExercise);
                   }}
-                  className="text-xs text-brand-neon hover:underline flex items-center gap-1 font-bold px-2 py-1 rounded-lg bg-brand-neon/10 border border-brand-neon/30"
+                  className="text-xs text-brand-neon hover:underline flex items-center gap-1 font-bold px-2.5 py-1.5 rounded-lg bg-brand-neon/10 border border-brand-neon/30 shrink-0"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>新規種目を作成</span>
@@ -535,7 +535,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
 
             {/* 新規種目作成フォーム */}
             {isCreatingExercise && (
-              <div className="p-3.5 rounded-2xl bg-dark-850 border border-brand-neon/40 my-2.5 space-y-2.5 animate-in fade-in duration-150">
+              <div className="p-3.5 rounded-2xl bg-dark-850 border border-brand-neon/40 my-2.5 space-y-2.5 animate-in fade-in duration-150 shrink-0">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-brand-neon">新しい筋トレ種目を登録</span>
                   <button
@@ -603,12 +603,15 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
               </div>
             )}
 
-            {/* 部位フィルター */}
-            <div className="flex gap-1.5 overflow-x-auto py-2.5">
+            {/* 部位フィルター (iOS Safariで縦に潰れないよう shrink-0 と flex-wrap を指定) */}
+            <div className="flex flex-wrap items-center gap-1.5 py-3 shrink-0 border-b border-dark-800/60">
               <button
+                type="button"
                 onClick={() => setSelectedBodyPartFilter('all')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                  selectedBodyPartFilter === 'all' ? 'bg-brand-neon text-dark-950' : 'bg-dark-800 text-slate-300'
+                className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold leading-snug whitespace-nowrap transition-all active:scale-95 ${
+                  selectedBodyPartFilter === 'all'
+                    ? 'bg-brand-neon text-dark-950 shadow-sm shadow-brand-neon/20'
+                    : 'bg-dark-800 text-slate-300 border border-dark-700'
                 }`}
               >
                 すべて
@@ -616,9 +619,12 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
               {bodyParts.map(bp => (
                 <button
                   key={bp.id}
+                  type="button"
                   onClick={() => setSelectedBodyPartFilter(bp.id)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                    selectedBodyPartFilter === bp.id ? 'bg-brand-neon text-dark-950' : 'bg-dark-800 text-slate-300'
+                  className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold leading-snug whitespace-nowrap transition-all active:scale-95 ${
+                    selectedBodyPartFilter === bp.id
+                      ? 'bg-brand-neon text-dark-950 shadow-sm shadow-brand-neon/20'
+                      : 'bg-dark-800 text-slate-300 border border-dark-700'
                   }`}
                 >
                   {bp.name}
@@ -627,7 +633,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
             </div>
 
             {/* 種目リスト */}
-            <div className="flex-1 overflow-y-auto space-y-1.5 py-2">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 py-2.5">
               {exercises
                 .filter(e => selectedBodyPartFilter === 'all' || e.bodyPartId === selectedBodyPartFilter)
                 .map(ex => {
@@ -635,8 +641,9 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
                   return (
                     <button
                       key={ex.id}
+                      type="button"
                       onClick={() => handleAddExerciseToSession(ex)}
-                      className="w-full text-left p-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 active:scale-98 transition-all flex items-center justify-between"
+                      className="w-full text-left p-3 rounded-xl bg-dark-800 hover:bg-dark-750 active:scale-98 transition-all flex items-center justify-between"
                     >
                       <div>
                         <div className="text-xs font-bold text-white">{ex.name}</div>
@@ -644,7 +651,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
                           {bpName} · {EQUIPMENT_LABELS[ex.equipment] || ex.equipment}
                         </div>
                       </div>
-                      <Plus className="w-4 h-4 text-brand-neon" />
+                      <Plus className="w-4 h-4 text-brand-neon shrink-0 ml-2" />
                     </button>
                   );
                 })}

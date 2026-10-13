@@ -371,12 +371,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
 
         {/* 部位別フィルター */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
+        <div className="flex flex-wrap items-center gap-1.5 py-1 shrink-0">
           <button
             type="button"
             onClick={() => setExerciseFilterPart('all')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
-              exerciseFilterPart === 'all' ? 'bg-brand-neon text-dark-950' : 'bg-dark-800 text-slate-300'
+            className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold leading-snug whitespace-nowrap transition-all active:scale-95 ${
+              exerciseFilterPart === 'all'
+                ? 'bg-brand-neon text-dark-950 shadow-sm shadow-brand-neon/20'
+                : 'bg-dark-800 text-slate-300 border border-dark-700'
             }`}
           >
             すべて
@@ -389,8 +391,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 setExerciseFilterPart(bp.id);
                 setNewExercisePart(bp.id);
               }}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
-                exerciseFilterPart === bp.id ? 'bg-brand-neon text-dark-950' : 'bg-dark-800 text-slate-300'
+              className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold leading-snug whitespace-nowrap transition-all active:scale-95 ${
+                exerciseFilterPart === bp.id
+                  ? 'bg-brand-neon text-dark-950 shadow-sm shadow-brand-neon/20'
+                  : 'bg-dark-800 text-slate-300 border border-dark-700'
               }`}
             >
               {bp.name}
