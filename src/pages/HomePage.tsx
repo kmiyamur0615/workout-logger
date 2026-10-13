@@ -228,7 +228,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                     {s.exercises.length} 種目
                   </div>
                   <div className="text-[10px] text-slate-500">
-                    {s.exercises.reduce((acc, ex) => acc + ex.sets.filter(st => st.isCompleted).length, 0)} セット完了
+                    {s.exercises.reduce((acc, ex) => acc + ex.sets.length, 0)} セット
                   </div>
                 </div>
               </div>

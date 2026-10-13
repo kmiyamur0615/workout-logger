@@ -26,7 +26,6 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
 
   const totalExercises = session.exercises.length;
   const totalSets = session.exercises.reduce((acc, ex) => acc + ex.sets.length, 0);
-  const completedSets = session.exercises.reduce((acc, ex) => acc + ex.sets.filter(s => s.isCompleted).length, 0);
 
   const handleFinish = () => {
     if (syncExternal) {
@@ -66,9 +65,9 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
             </div>
           </div>
           <div>
-            <div className="text-[10px] text-slate-400 font-medium">完了セット数</div>
+            <div className="text-[10px] text-slate-400 font-medium">セット数</div>
             <div className="text-base font-bold text-brand-neon font-mono mt-0.5">
-              {completedSets} / {totalSets}
+              {totalSets} <span className="text-[10px] font-normal text-slate-400">セット</span>
             </div>
           </div>
         </div>

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Plus, Dumbbell, CheckCircle2, X, Sparkles, Share2 } from 'lucide-react';
 import { WorkoutSession, WorkoutExercise, WorkoutSet, Exercise, BodyPart, EquipmentType, RoutineMenu } from '../types';
 import { ExerciseCard } from '../components/ExerciseCard';
-import { NumericKeypad } from '../components/NumericKeypad';
 import { WorkoutModal } from '../components/WorkoutModal';
 import { GasApiService } from '../services/gasApi';
 import { HealthSyncService } from '../services/healthSync';
@@ -50,60 +49,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
   const [newExBodyPart, setNewExBodyPart] = useState<string>('chest');
   const [newExEquipment, setNewExEquipment] = useState<EquipmentType>('MACHINE');
 
-  // テンキー入力状態
-  const [activeInput, setActiveInput] = useState<{
-    exerciseId: string;
-    setId: string;
-    field: 'weight' | 'reps';
-  } | null>(null);
-  const [inputBuffer, setInputBuffer] = useState('');
-
-  // フィールド選択（テンキー起動）
-  const handleSelectField = (exerciseId: string, setId: string, field: 'weight' | 'reps') => {
-    const targetEx = session.exercises.find(e => e.id === exerciseId);
-    const targetSet = targetEx?.sets.find(s => s.id === setId);
-    const val = targetSet ? (field === 'weight' ? targetSet.weight : targetSet.reps) : 0;
-
-    setActiveInput({ exerciseId, setId, field });
-    setInputBuffer(val > 0 ? val.toString() : '');
-  };
-
-  // テンキー入力
-  const handleKeyPress = (key: string) => {
-    if (key === '.' && inputBuffer.includes('.')) return;
-    if (inputBuffer.length >= 6) return;
-    const next = inputBuffer + key;
-    setInputBuffer(next);
-    applyValue(next);
-  };
-
-  const handleDelete = () => {
-    const next = inputBuffer.slice(0, -1);
-    setInputBuffer(next);
-    applyValue(next);
-  };
-
-  const handleQuickAdd = (amount: number) => {
-    const current = parseFloat(inputBuffer) || 0;
-    const next = Math.max(0, current + amount);
-    const rounded = Math.round(next * 100) / 100;
-    setInputBuffer(rounded.toString());
-    applyValue(rounded.toString());
-  };
-
-  const applyValue = (valStr: string) => {
-    if (!activeInput) return;
-    const num = parseFloat(valStr) || 0;
-    handleUpdateSet(activeInput.exerciseId, activeInput.setId, {
-      [activeInput.field]: num
-    });
-  };
-
-  const handleConfirmInput = () => {
-    setActiveInput(null);
-  };
-
-  // セットの更新
+  // セットの更新（入力されているセットはすべて完了扱い）
   const handleUpdateSet = (exerciseId: string, setId: string, updates: Partial<WorkoutSet>) => {
     const updatedExercises = session.exercises.map(ex => {
       if (ex.id !== exerciseId) return ex;
@@ -111,11 +57,12 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
         ...ex,
         sets: ex.sets.map(s => {
           if (s.id !== setId) return s;
-          const updatedSet = { ...s, ...updates };
-          if (updates.isCompleted !== undefined && updates.isCompleted) {
-            updatedSet.completedAt = new Date().toISOString();
-          }
-          return updatedSet;
+          return {
+            ...s,
+            ...updates,
+            isCompleted: true,
+            completedAt: new Date().toISOString(),
+          };
         })
       };
     });
@@ -141,7 +88,8 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
       weight: lastSet ? lastSet.weight : 0,
       reps: lastSet ? lastSet.reps : 0,
       isAssisted: lastSet ? lastSet.isAssisted : false,
-      isCompleted: false,
+      isCompleted: true,
+      completedAt: new Date().toISOString(),
     };
 
     const updatedExercises = session.exercises.map(ex => {
@@ -179,7 +127,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
     });
   };
 
-  // 上のSetからのコピー機能（一括コピー: 重量・回数・完了フラグ / 重量のみ / 回数のみ）
+  // 上のSetからのコピー機能（一括コピー: 重量・回数 / 重量のみ / 回数のみ）
   const handleCopyFromAbove = (exerciseId: string, mode: 'all' | 'weight' | 'reps') => {
     const targetEx = session.exercises.find(e => e.id === exerciseId);
     if (!targetEx || targetEx.sets.length < 2) return;
@@ -190,11 +138,10 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
 
     if (!sourceSet || !targetSet) return;
 
-    const updates: Partial<WorkoutSet> = {};
+    const updates: Partial<WorkoutSet> = { isCompleted: true };
     if (mode === 'all') {
       updates.weight = sourceSet.weight;
       updates.reps = sourceSet.reps;
-      updates.isCompleted = sourceSet.isCompleted; // 完了フラグもコピー
     } else if (mode === 'weight') {
       updates.weight = sourceSet.weight;
     } else if (mode === 'reps') {
@@ -223,7 +170,8 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
           weight: firstPrevSet ? firstPrevSet.weight : 0,
           reps: firstPrevSet ? firstPrevSet.reps : 0,
           isAssisted: false,
-          isCompleted: false,
+          isCompleted: true,
+          completedAt: new Date().toISOString(),
         }
       ]
     };
@@ -307,20 +255,11 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
     setIsModalOpen(false);
   };
 
-  // 1RM推定計算 (参考表示)
-  const currentSetFor1RM = activeInput
-    ? session.exercises.find(e => e.id === activeInput.exerciseId)?.sets.find(s => s.id === activeInput.setId)
-    : null;
-  const estimated1RM = currentSetFor1RM && currentSetFor1RM.reps > 0 && currentSetFor1RM.weight > 0
-    ? Math.round(currentSetFor1RM.weight * (1 + currentSetFor1RM.reps / 30))
-    : undefined;
-
-  const completedSetsCount = session.exercises.reduce((acc, ex) => acc + ex.sets.filter(s => s.isCompleted).length, 0);
   const totalSetsCount = session.exercises.reduce((acc, ex) => acc + ex.sets.length, 0);
   const todayFormatted = new Date().toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' });
 
   return (
-    <div className="pb-36 px-4 pt-3 max-w-lg mx-auto">
+    <div className="pb-28 px-4 pt-3 max-w-lg mx-auto">
       {/* 上部ステータスバー（常時入力・自動保存仕様） */}
       <div className="sticky top-[57px] z-30 bg-dark-900/95 backdrop-blur-md py-2.5 px-3.5 rounded-2xl border border-dark-800 flex items-center justify-between mb-4 shadow-xl">
         <div>
@@ -335,7 +274,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
           <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
             <CheckCircle2 className="w-3 h-3 text-brand-neon" />
             <span>
-              {session.exercises.length}種目 · 完了 {completedSetsCount}/{totalSetsCount} セット
+              {session.exercises.length}種目 · {totalSetsCount} セット
             </span>
           </div>
         </div>
@@ -374,7 +313,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
             <Dumbbell className="w-10 h-10 text-brand-neon mx-auto mb-2 opacity-80" />
             <h3 className="text-sm font-bold text-white">本日の種目を追加して記録</h3>
             <p className="text-xs text-slate-400 mt-1 mb-4">
-              入力した重量・回数・完了チェックはすべて自動で履歴に保存されます
+              入力した重量・回数はすべて自動で履歴に保存されます
             </p>
             <button
               type="button"
@@ -422,8 +361,6 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
             <ExerciseCard
               key={ex.id}
               exercise={ex}
-              activeInput={activeInput}
-              onSelectField={handleSelectField}
               onUpdateSet={handleUpdateSet}
               onAddSet={handleAddSet}
               onDeleteSet={handleDeleteSet}
@@ -482,21 +419,6 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
               ))}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* 画面下部フロートテンキー */}
-      {activeInput && (
-        <div className="fixed bottom-16 left-0 right-0 z-50 max-w-lg mx-auto animate-in slide-in-from-bottom duration-150">
-          <NumericKeypad
-            currentValue={inputBuffer}
-            field={activeInput.field}
-            onKeyPress={handleKeyPress}
-            onQuickAdd={handleQuickAdd}
-            onDelete={handleDelete}
-            onConfirm={handleConfirmInput}
-            estimated1RM={estimated1RM}
-          />
         </div>
       )}
 

@@ -363,7 +363,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
               <div className="space-y-3">
                 {/* 選択日の筋トレセッション */}
                 {selectedDayData.strength.map((session) => {
-                  const completedSets = session.exercises.reduce((acc, ex) => acc + ex.sets.filter(s => s.isCompleted).length, 0);
+                  const totalSets = session.exercises.reduce((acc, ex) => acc + ex.sets.length, 0);
                   const isExpanded = expandedSessionId === session.id;
 
                   return (
@@ -378,7 +378,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                             <span>筋トレ</span>
                           </span>
                           <span className="text-[11px] font-semibold text-brand-neon">
-                            {completedSets} セット完了
+                            {totalSets} セット
                           </span>
                         </div>
 
@@ -406,12 +406,12 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                                 <div className="font-bold text-slate-200 mb-1 flex justify-between">
                                   <span>{ex.exerciseName}</span>
                                   <span className="text-[10px] text-slate-400 font-normal">
-                                    {ex.sets.filter(s => s.isCompleted).length}/{ex.sets.length}完了
+                                    {ex.sets.length}セット
                                   </span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-1 font-mono text-[11px]">
                                   {ex.sets.map((s) => (
-                                    <div key={s.id} className={`px-1.5 py-0.5 rounded flex justify-between ${s.isCompleted ? 'bg-dark-800 text-white' : 'bg-dark-800/40 text-slate-500 line-through'}`}>
+                                    <div key={s.id} className="px-1.5 py-0.5 rounded flex justify-between bg-dark-800 text-white">
                                       <span className="text-slate-400 text-[10px]">S{s.setNumber}:</span>
                                       <span>{s.weight}kg × {s.reps}</span>
                                     </div>
@@ -531,7 +531,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                         </span>
                         <div className="flex items-center gap-2">
                           <span className="text-slate-400 font-mono text-[11px]">
-                            {s.exercises.reduce((acc, ex) => acc + ex.sets.filter(st => st.isCompleted).length, 0)} sets
+                            {s.exercises.reduce((acc, ex) => acc + ex.sets.length, 0)} sets
                           </span>
                           <button
                             type="button"
@@ -670,31 +670,25 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                           <span className="text-[10px] font-mono text-slate-400 w-6">#{set.setNumber}</span>
                           <div className="flex items-center gap-1 flex-1">
                             <input
-                              type="number"
-                              step="0.5"
+                              type="text"
+                              inputMode="decimal"
                               value={set.weight}
+                              onFocus={(e) => e.currentTarget.select()}
                               onChange={(e) => handleUpdateSetInEditingSession(exIdx, setIdx, 'weight', parseFloat(e.target.value) || 0)}
-                              className="w-16 bg-dark-800 border border-dark-700 rounded-lg px-1.5 py-1 text-center font-mono text-xs text-white"
+                              className="w-16 bg-dark-800 border border-dark-700 rounded-lg px-1.5 py-1 text-center font-mono text-base text-white"
                             />
                             <span className="text-[10px] text-slate-400">kg</span>
                             <span className="text-slate-500 mx-0.5">×</span>
                             <input
-                              type="number"
-                              step="1"
+                              type="text"
+                              inputMode="numeric"
                               value={set.reps}
-                              onChange={(e) => handleUpdateSetInEditingSession(exIdx, setIdx, 'reps', parseInt(e.target.value) || 0)}
-                              className="w-12 bg-dark-800 border border-dark-700 rounded-lg px-1.5 py-1 text-center font-mono text-xs text-white"
+                              onFocus={(e) => e.currentTarget.select()}
+                              onChange={(e) => handleUpdateSetInEditingSession(exIdx, setIdx, 'reps', parseInt(e.target.value, 10) || 0)}
+                              className="w-14 bg-dark-800 border border-dark-700 rounded-lg px-1.5 py-1 text-center font-mono text-base text-white"
                             />
                             <span className="text-[10px] text-slate-400">回</span>
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateSetInEditingSession(exIdx, setIdx, 'isCompleted', !set.isCompleted)}
-                            className={`p-1 rounded-md text-[10px] font-bold ${set.isCompleted ? 'bg-brand-neon/20 text-brand-neon' : 'bg-dark-800 text-slate-500'}`}
-                          >
-                            {set.isCompleted ? '完了' : '未完'}
-                          </button>
 
                           <button
                             type="button"

@@ -91,7 +91,8 @@ export function App() {
               weight: prevSet ? prevSet.weight : (item.targetWeight || 0),
               reps: prevSet ? prevSet.reps : (item.targetReps || 10),
               isAssisted: false,
-              isCompleted: false,
+              isCompleted: true,
+              completedAt: new Date().toISOString(),
             };
           })
         };
