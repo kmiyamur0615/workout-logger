@@ -4,6 +4,10 @@
 
 :root {
   color-scheme: dark;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --header-pt: calc(var(--safe-top) + 0.65rem);
+  --header-height: calc(var(--safe-top) + 3.75rem);
 }
 
 body {
@@ -30,10 +34,30 @@ body {
   user-select: none;
 }
 
-/* iOS Standalone PWAセーフエリア対応 */
-.pt-safe {
-  padding-top: max(env(safe-area-inset-top, 0px), 12px);
+/* iOS Standalone PWAセーフエリア対応:
+   ホーム画面起動時はノッチやDynamic Island（約54px）に埋もれないよう、
+   env()が0を返した場合でも確実に54pxの最小上部マージンを保証 */
+@media (display-mode: standalone) {
+  :root {
+    --safe-top: max(env(safe-area-inset-top, 0px), 54px);
+    --safe-bottom: max(env(safe-area-inset-bottom, 0px), 20px);
+  }
 }
-.pb-safe {
-  padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
+
+html.is-standalone {
+  --safe-top: max(env(safe-area-inset-top, 0px), 54px);
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), 20px);
+}
+
+.app-header {
+  padding-top: var(--header-pt) !important;
+  padding-bottom: 0.65rem !important;
+}
+
+.sub-header-sticky {
+  top: var(--header-height) !important;
+}
+
+.app-nav {
+  padding-bottom: var(--safe-bottom) !important;
 }

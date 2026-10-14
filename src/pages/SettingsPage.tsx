@@ -13,7 +13,8 @@ import {
   Smartphone,
   Calendar,
   Dumbbell,
-  Edit3
+  Edit3,
+  RotateCcw
 } from 'lucide-react';
 import { AppSettings, CardioType, RoutineMenu, WeekdaySchedule, Exercise, DayOfWeek, BodyPart, EquipmentType } from '../types';
 import { StorageService } from '../services/storage';
@@ -714,6 +715,41 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         >
           <Download className="w-3.5 h-3.5 text-brand-neon" />
           <span>全データをJSONでエクスポート</span>
+        </button>
+      </div>
+
+      {/* アプリ情報 ＆ キャッシュクリア */}
+      <div className="bg-dark-850 border border-dark-800 rounded-3xl p-5 shadow-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-slate-300">アプリバージョン</span>
+          <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-brand-neon/15 text-brand-neon font-bold">
+            v1.5 (PWA最適化)
+          </span>
+        </div>
+        <p className="text-[10px] text-slate-400 leading-relaxed">
+          iPhoneホーム画面から起動した際に最新画面が反映されない場合は、下のボタンを押すとキャッシュを完全に削除して即座に最新版へ更新します。
+        </p>
+        <button
+          type="button"
+          onClick={async () => {
+            if ('serviceWorker' in navigator) {
+              const registrations = await navigator.serviceWorker.getRegistrations();
+              for (const r of registrations) {
+                await r.unregister();
+              }
+            }
+            if ('caches' in window) {
+              const keys = await caches.keys();
+              for (const k of keys) {
+                await caches.delete(k);
+              }
+            }
+            window.location.reload();
+          }}
+          className="w-full py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 active:scale-98 text-xs font-semibold text-slate-200 border border-dark-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation"
+        >
+          <RotateCcw className="w-3.5 h-3.5 text-brand-neon" />
+          <span>キャッシュを完全削除して最新版に更新</span>
         </button>
       </div>
 
