@@ -144,7 +144,14 @@ export function App() {
           StorageService.saveExercises(mergedExercises);
           setExercises(mergedExercises);
         }
-        if (data.schedule) {
+        // スケジュールの保護と同期:
+        // ローカルにメニュー設定がある場合はスプレッドシートへアップロードして上書き消失を防止
+        const hasLocalSchedule = schedule.some(s => s.menuId);
+        const hasRemoteSchedule = data.schedule && data.schedule.some((s: WeekdaySchedule) => s.menuId);
+
+        if (hasLocalSchedule) {
+          await GasApiService.syncSchedule(settings.gasWebAppUrl, schedule);
+        } else if (hasRemoteSchedule) {
           StorageService.saveSchedule(data.schedule);
           setSchedule(data.schedule);
         }
@@ -188,6 +195,11 @@ export function App() {
   const handleUpdateSchedule = (newSchedule: WeekdaySchedule[]) => {
     StorageService.saveSchedule(newSchedule);
     setSchedule(newSchedule);
+    if (settings.gasWebAppUrl) {
+      GasApiService.syncSchedule(settings.gasWebAppUrl, newSchedule).catch(err =>
+        console.error('GASへのスケジュール同期に失敗:', err)
+      );
+    }
   };
 
   const handleDeletePastSession = (sessionId: string) => {

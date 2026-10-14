@@ -9,7 +9,13 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onSyncGAS, isSyncing = false, activeSessionName }) => {
   return (
-    <header className="sticky top-0 z-40 bg-dark-900/90 backdrop-blur-md border-b border-dark-800 px-4 pt-safe pb-3 flex items-center justify-between">
+    <header
+      className="sticky top-0 z-40 bg-dark-900/95 backdrop-blur-md border-b border-dark-800 px-4 flex items-center justify-between"
+      style={{
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.65rem)',
+        paddingBottom: '0.65rem',
+      }}
+    >
       <div className="flex items-center space-x-2.5">
         <div className="w-8 h-8 rounded-xl bg-brand-accent/20 border border-brand-accent/40 flex items-center justify-center">
           <Dumbbell className="w-4 h-4 text-brand-neon" />

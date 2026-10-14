@@ -214,6 +214,26 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // 曜日別デフォルトスケジュールの保存
+    if (data.action === 'SAVE_SCHEDULE') {
+      const schedule = data.schedule || [];
+      const schedSheet = ss.getSheetByName('schedule') || ss.insertSheet('schedule');
+      const lastRow = schedSheet.getLastRow();
+      if (lastRow > 1) {
+        schedSheet.getRange(2, 1, lastRow - 1, 3).clearContent();
+      }
+      const dayNames = ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日'];
+      const rows = schedule.map(function(s) {
+        return [s.dayOfWeek, dayNames[s.dayOfWeek] || '', s.menuId || ''];
+      });
+      if (rows.length > 0) {
+        schedSheet.getRange(2, 1, rows.length, 3).setValues(rows);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     return ContentService.createTextOutput(JSON.stringify({ status: 'unknown_action' }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (error) {

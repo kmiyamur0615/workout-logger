@@ -1,4 +1,4 @@
-import { WorkoutSession, CardioLog, Exercise } from '../types';
+import { WorkoutSession, CardioLog, Exercise, WeekdaySchedule } from '../types';
 
 export const GasApiService = {
   // スプレッドシートからマスタ取得 (doGet)
@@ -118,6 +118,31 @@ export const GasApiService = {
       return resJson.status === 'success';
     } catch (err) {
       console.error('GAS種目追加同期エラー:', err);
+      return false;
+    }
+  },
+
+  // 曜日別デフォルトスケジュールの送信
+  async syncSchedule(gasUrl: string, schedule: WeekdaySchedule[]): Promise<boolean> {
+    if (!gasUrl) return false;
+
+    try {
+      const payload = {
+        action: 'SAVE_SCHEDULE',
+        schedule
+      };
+
+      const response = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) return false;
+      const resJson = await response.json();
+      return resJson.status === 'success';
+    } catch (err) {
+      console.error('GASスケジュール同期エラー:', err);
       return false;
     }
   }

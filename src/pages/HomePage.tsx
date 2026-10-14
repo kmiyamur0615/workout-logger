@@ -95,8 +95,8 @@ export const HomePage: React.FC<HomePageProps> = ({
               onClick={() => onStartSession(todayMenu.id)}
               className="w-full py-3.5 px-4 rounded-2xl bg-brand-neon hover:bg-green-400 active:scale-98 text-dark-950 font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-xl shadow-brand-neon/25"
             >
-              <Play className="w-4 h-4 fill-dark-950 stroke-none" />
-              <span>このメニューで記録する</span>
+              <Dumbbell className="w-4 h-4 stroke-[2.5]" />
+              <span>筋トレを記録する ({todayMenu.name})</span>
             </button>
 
             {/* サブアクション */}
@@ -113,33 +113,36 @@ export const HomePage: React.FC<HomePageProps> = ({
                 onClick={() => onStartSession()}
                 className="text-slate-400 hover:text-brand-neon font-medium transition-colors"
               >
-                種目を自由に追加 →
+                フリー入力で記録 →
               </button>
             </div>
           </div>
         ) : (
           <div>
             <h2 className="text-xl font-extrabold text-white tracking-tight mt-1 mb-1">
-              本日はオフ（休養日）
+              本日は休養日（オフ）
             </h2>
             <p className="text-xs text-slate-400 font-medium mb-4">
-              筋肉を休めるか、別メニューや有酸素運動を実施できます
+              休養するか、種目を自由に入力・メニューを選んで筋トレを記録できます
             </p>
 
-            <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => onStartSession()}
+              className="w-full py-3.5 px-4 rounded-2xl bg-brand-neon hover:bg-green-400 active:scale-98 text-dark-950 font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-xl shadow-brand-neon/25"
+            >
+              <Dumbbell className="w-4 h-4 stroke-[2.5]" />
+              <span>筋トレを記録する (フリー入力)</span>
+            </button>
+
+            {/* サブアクション */}
+            <div className="mt-3 pt-3 border-t border-dark-750/60 flex items-center justify-between text-xs">
               <button
                 type="button"
                 onClick={() => setIsSelectMenuOpen(true)}
-                className="py-3 px-3 rounded-xl bg-dark-750 hover:bg-dark-700 active:scale-98 text-slate-200 font-bold text-xs transition-all flex items-center justify-center gap-1.5 border border-dark-600"
+                className="text-slate-400 hover:text-white transition-colors"
               >
-                <span>メニューを選ぶ</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onStartSession()}
-                className="py-3 px-3 rounded-xl bg-brand-neon/15 hover:bg-brand-neon/25 active:scale-98 text-brand-neon font-bold text-xs transition-all flex items-center justify-center gap-1.5 border border-brand-neon/30"
-              >
-                <span>種目を自由に追加</span>
+                登録メニューから選ぶ →
               </button>
             </div>
           </div>

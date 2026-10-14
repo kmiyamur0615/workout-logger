@@ -29,3 +29,11 @@ body {
   -webkit-user-select: none;
   user-select: none;
 }
+
+/* iOS Standalone PWAセーフエリア対応 */
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top, 0px), 12px);
+}
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
+}
