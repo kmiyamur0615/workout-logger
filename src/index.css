@@ -52,10 +52,16 @@ html.is-standalone {
 .app-header {
   padding-top: var(--header-pt) !important;
   padding-bottom: 0.65rem !important;
+  background-color: #111318 !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 
 .sub-header-sticky {
   top: var(--header-height) !important;
+  background-color: #111318 !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 
 .app-nav {

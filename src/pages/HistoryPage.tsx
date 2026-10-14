@@ -29,6 +29,32 @@ interface HistoryPageProps {
   onUpdateCardioLog?: (log: CardioLog) => void;
 }
 
+// 日付文字列 (YYYY-MM-DD) ヘルパー（ローカルタイム基準）
+const toDateKey = (date: Date | string) => {
+  const d = new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+// タイムゾーンのUTC解釈ズレを防ぐ表示用フォーマッター
+const formatDisplayDate = (dateKey: string) => {
+  if (!dateKey) return '';
+  const [y, m, d] = dateKey.split('-').map(Number);
+  if (!y || !m || !d) return dateKey;
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
+};
+
+const formatListDate = (dateKey: string) => {
+  if (!dateKey) return '';
+  const [y, m, d] = dateKey.split('-').map(Number);
+  if (!y || !m || !d) return dateKey;
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric', weekday: 'short' });
+};
+
 export const HistoryPage: React.FC<HistoryPageProps> = ({
   sessions,
   cardioLogs,
@@ -41,10 +67,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   const [currentDate, setCurrentDate] = useState(() => new Date());
-  const [selectedDateStr, setSelectedDateStr] = useState<string>(() => {
-    const today = new Date();
-    return today.toISOString().slice(0, 10);
-  });
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(() => toDateKey(new Date()));
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
 
   // 編集モーダル用の状態
@@ -126,15 +149,6 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
   // カレンダー計算
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth(); // 0-indexed
-
-  // 日付文字列 (YYYY-MM-DD) ヘルパー
-  const toDateKey = (date: Date | string) => {
-    const d = new Date(date);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
 
   // 日付ごとの記録マップを作成 (O(1)でルックアップ可能に)
   const historyMap = useMemo(() => {
@@ -351,7 +365,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
           <div className="space-y-3">
             <div className="flex items-center justify-between px-1">
               <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
-                <span>{selectedDateStr ? new Date(selectedDateStr).toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' }) : ''} の記録</span>
+                <span>{formatDisplayDate(selectedDateStr)} の記録</span>
               </h3>
             </div>
 
@@ -511,7 +525,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                 .map(([dateKey, entry]) => (
                   <div key={dateKey} className="bg-dark-850 border border-dark-800 rounded-2xl p-3.5 space-y-2">
                     <div className="text-xs font-bold text-slate-300 pb-1.5 border-b border-dark-750 flex items-center justify-between">
-                      <span>{new Date(dateKey).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric', weekday: 'short' })}</span>
+                      <span>{formatListDate(dateKey)}</span>
                       <div className="flex items-center gap-1">
                         {entry.strength.length > 0 && (
                           <span className="w-2 h-2 rounded-full bg-brand-neon" />

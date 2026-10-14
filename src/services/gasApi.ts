@@ -7,17 +7,27 @@ export const GasApiService = {
       throw new Error('GAS Web App URLが設定されていません');
     }
 
-    const response = await fetch(gasUrl, {
-      method: 'GET',
-      mode: 'cors',
-    });
+    try {
+      const response = await fetch(gasUrl, {
+        method: 'GET',
+        mode: 'cors',
+      });
 
-    if (!response.ok) {
-      throw new Error(`GAS通信エラー: ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (err: any) {
+      console.error('GAS fetchSpreadsheetData error:', err);
+      if (err.message && err.message.includes('HTTP')) {
+        throw err;
+      }
+      throw new Error(
+        'GASへの接続に失敗しました (Load failed)。Apps Scriptの「デプロイを管理」にて「アクセスできるユーザー: 全員」に設定されているかご確認ください。'
+      );
     }
-
-    const data = await response.json();
-    return data;
   },
 
   // ワークアウト終了時にセッション＋全セットを一括送信 (doPost)

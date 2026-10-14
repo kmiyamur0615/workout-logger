@@ -139,6 +139,11 @@ export const StorageService = {
       s.cardioShortcuts = INITIAL_SETTINGS.cardioShortcuts;
       changed = true;
     }
+    // gasWebAppUrlが空の場合の初期補完
+    if (!s.gasWebAppUrl && INITIAL_SETTINGS.gasWebAppUrl) {
+      s.gasWebAppUrl = INITIAL_SETTINGS.gasWebAppUrl;
+      changed = true;
+    }
     if (changed) {
       this.saveSettings(s);
     }

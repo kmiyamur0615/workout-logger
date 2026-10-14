@@ -261,7 +261,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
   return (
     <div className="pb-28 px-4 pt-3 max-w-lg mx-auto">
       {/* 上部ステータスバー（常時入力・自動保存仕様） */}
-      <div className="sub-header-sticky sticky z-30 bg-dark-900/95 backdrop-blur-md py-2.5 px-3.5 rounded-2xl border border-dark-800 flex items-center justify-between mb-4 shadow-xl">
+      <div className="sub-header-sticky sticky z-30 bg-dark-900 py-2.5 px-3.5 rounded-2xl border border-dark-800 flex items-center justify-between mb-4 shadow-xl">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-bold text-white tracking-tight">

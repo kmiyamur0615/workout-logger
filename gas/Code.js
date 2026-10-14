@@ -127,10 +127,102 @@ function doGet(e) {
       });
     }
 
+    // 3. workouts & sets (筋トレ履歴)
+    const woSheet = ss.getSheetByName('workouts');
+    const woData = woSheet ? woSheet.getDataRange().getValues() : [];
+    const setSheet = ss.getSheetByName('sets');
+    const setData = setSheet ? setSheet.getDataRange().getValues() : [];
+
+    const setsBySession = {};
+    for (let i = 1; i < setData.length; i++) {
+      const row = setData[i];
+      const sId = String(row[0] || '').trim();
+      if (!sId) continue;
+      if (!setsBySession[sId]) setsBySession[sId] = [];
+      setsBySession[sId].push({
+        sessionId: sId,
+        exerciseName: String(row[1] || '種目'),
+        setNumber: Number(row[2]) || 1,
+        weight: Number(row[3]) || 0,
+        reps: Number(row[4]) || 0,
+        isCompleted: String(row[5]).toUpperCase() === 'TRUE',
+        completedAt: row[6] ? (row[6] instanceof Date ? row[6].toISOString() : String(row[6])) : ''
+      });
+    }
+
+    const pastSessions = [];
+    for (let i = 1; i < woData.length; i++) {
+      const row = woData[i];
+      const sId = String(row[0] || '').trim();
+      if (!sId) continue;
+      const rawSets = setsBySession[sId] || [];
+
+      const exerciseMap = {};
+      const exList = [];
+      rawSets.forEach((s, idx) => {
+        if (!exerciseMap[s.exerciseName]) {
+          const exObj = {
+            id: 'we-' + sId + '-' + (exList.length + 1),
+            exerciseId: 'ex-custom-' + s.exerciseName,
+            exerciseName: s.exerciseName,
+            bodyPartId: 'other',
+            orderIndex: exList.length + 1,
+            sets: []
+          };
+          exerciseMap[s.exerciseName] = exObj;
+          exList.push(exObj);
+        }
+        exerciseMap[s.exerciseName].sets.push({
+          id: 's-' + sId + '-' + (idx + 1),
+          setNumber: s.setNumber,
+          weight: s.weight,
+          reps: s.reps,
+          isCompleted: s.isCompleted,
+          completedAt: s.completedAt
+        });
+      });
+
+      const startedAt = row[1] instanceof Date ? row[1].toISOString() : String(row[1] || '');
+      const endedAt = row[2] ? (row[2] instanceof Date ? row[2].toISOString() : String(row[2])) : undefined;
+
+      pastSessions.push({
+        id: sId,
+        startedAt: startedAt,
+        endedAt: endedAt,
+        menuName: String(row[3] || '筋トレ'),
+        note: String(row[4] || ''),
+        isSyncedWithGAS: true,
+        exercises: exList
+      });
+    }
+
+    // 4. cardio_logs (有酸素運動ログ)
+    const clSheet = ss.getSheetByName('cardio_logs');
+    const clData = clSheet ? clSheet.getDataRange().getValues() : [];
+    const cardioLogs = [];
+    for (let i = 1; i < clData.length; i++) {
+      const row = clData[i];
+      const cId = String(row[0] || '').trim();
+      if (!cId) continue;
+      const endedAt = row[5] instanceof Date ? row[5].toISOString() : String(row[5] || '');
+      cardioLogs.push({
+        id: cId,
+        cardioTypeId: 'cardio-custom',
+        cardioTypeName: String(row[1] || '有酸素運動'),
+        distanceKm: Number(row[2]) || 0,
+        durationMinutes: Number(row[3]) || 0,
+        calories: Number(row[4]) || 0,
+        endedAt: endedAt,
+        note: String(row[6] || '')
+      });
+    }
+
     const result = {
       status: 'success',
       exercises: exercises,
-      schedule: schedule
+      schedule: schedule,
+      pastSessions: pastSessions,
+      cardioLogs: cardioLogs
     };
 
     return ContentService.createTextOutput(JSON.stringify(result))
@@ -146,21 +238,48 @@ function doPost(e) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const data = JSON.parse(e.postData.contents);
 
-    // 筋トレワークアウトの保存
+    // 筋トレワークアウトの保存（重複時は既存を更新）
     if (data.action === 'SAVE_WORKOUT') {
       const session = data.session;
       const sets = data.sets || [];
 
       const woSheet = ss.getSheetByName('workouts') || ss.insertSheet('workouts');
-      woSheet.appendRow([
-        session.id,
-        session.startedAt,
-        session.endedAt,
-        session.menuName,
-        session.note || ''
-      ]);
+      const woData = woSheet.getDataRange().getValues();
+      let existingWoRow = -1;
+      for (let i = 1; i < woData.length; i++) {
+        if (String(woData[i][0]).trim() === session.id) {
+          existingWoRow = i + 1;
+          break;
+        }
+      }
+
+      if (existingWoRow > 0) {
+        woSheet.getRange(existingWoRow, 1, 1, 5).setValues([[
+          session.id,
+          session.startedAt,
+          session.endedAt,
+          session.menuName,
+          session.note || ''
+        ]]);
+      } else {
+        woSheet.appendRow([
+          session.id,
+          session.startedAt,
+          session.endedAt,
+          session.menuName,
+          session.note || ''
+        ]);
+      }
 
       const setSheet = ss.getSheetByName('sets') || ss.insertSheet('sets');
+      // 既存の同一sessionIdのセット行を削除して再登録
+      const setData = setSheet.getDataRange().getValues();
+      for (let i = setData.length - 1; i >= 1; i--) {
+        if (String(setData[i][0]).trim() === session.id) {
+          setSheet.deleteRow(i + 1);
+        }
+      }
+
       if (sets.length > 0) {
         const rowsToAdd = sets.map(function(s) {
           return [
@@ -180,19 +299,40 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 有酸素運動の保存
+    // 有酸素運動の保存（重複時は既存を更新）
     if (data.action === 'SAVE_CARDIO') {
       const cardio = data.cardio;
       const clSheet = ss.getSheetByName('cardio_logs') || ss.insertSheet('cardio_logs');
-      clSheet.appendRow([
-        cardio.id,
-        cardio.cardioTypeName,
-        cardio.distanceKm,
-        cardio.durationMinutes,
-        cardio.calories,
-        cardio.endedAt,
-        cardio.note || ''
-      ]);
+      const clData = clSheet.getDataRange().getValues();
+      let existingClRow = -1;
+      for (let i = 1; i < clData.length; i++) {
+        if (String(clData[i][0]).trim() === cardio.id) {
+          existingClRow = i + 1;
+          break;
+        }
+      }
+
+      if (existingClRow > 0) {
+        clSheet.getRange(existingClRow, 1, 1, 7).setValues([[
+          cardio.id,
+          cardio.cardioTypeName,
+          cardio.distanceKm,
+          cardio.durationMinutes,
+          cardio.calories,
+          cardio.endedAt,
+          cardio.note || ''
+        ]]);
+      } else {
+        clSheet.appendRow([
+          cardio.id,
+          cardio.cardioTypeName,
+          cardio.distanceKm,
+          cardio.durationMinutes,
+          cardio.calories,
+          cardio.endedAt,
+          cardio.note || ''
+        ]);
+      }
 
       return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
         .setMimeType(ContentService.MimeType.JSON);

@@ -1,12 +1,13 @@
 import React from 'react';
 import { Play, Sparkles, Clock, ChevronRight, Activity, X, Dumbbell, Settings } from 'lucide-react';
-import { RoutineMenu, WeekdaySchedule, BodyPart, WorkoutSession, DayOfWeek } from '../types';
+import { RoutineMenu, WeekdaySchedule, BodyPart, WorkoutSession, CardioLog, DayOfWeek } from '../types';
 
 interface HomePageProps {
   schedule: WeekdaySchedule[];
   routineMenus: RoutineMenu[];
   bodyParts: BodyPart[];
   pastSessions: WorkoutSession[];
+  cardioLogs?: CardioLog[];
   onStartSession: (menuId?: string) => void;
   onNavigateToWorkout: () => void;
   hasActiveSession: boolean;
@@ -19,6 +20,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   routineMenus,
   bodyParts,
   pastSessions,
+  cardioLogs = [],
   onStartSession,
   onNavigateToWorkout,
   hasActiveSession,
@@ -211,34 +213,96 @@ export const HomePage: React.FC<HomePageProps> = ({
         </div>
       </div>
 
-      {/* 直近の筋トレ履歴 */}
-      {pastSessions.length > 0 && (
-        <div className="bg-dark-850 border border-dark-800 rounded-3xl p-4 shadow-lg">
-          <h3 className="text-sm font-bold text-white tracking-tight mb-3 px-1">
-            直近のワークアウト
-          </h3>
-          <div className="space-y-2">
-            {pastSessions.slice(0, 3).map((s) => (
-              <div key={s.id} className="p-3 rounded-2xl bg-dark-900/60 border border-dark-800 flex items-center justify-between text-xs">
-                <div>
-                  <div className="font-bold text-white">{s.menuName || 'ワークアウト'}</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    {new Date(s.startedAt).toLocaleDateString('ja-JP')}
+      {/* 直近のトレーニング履歴 (筋トレ & 有酸素) */}
+      {(() => {
+        const strengthItems = pastSessions
+          .filter(s => s.exercises && s.exercises.length > 0)
+          .map(s => ({
+            type: 'strength' as const,
+            id: s.id,
+            date: s.startedAt,
+            title: s.menuName || '筋トレ',
+            subtitle: `${s.exercises.length}種目 · ${s.exercises.reduce((acc, ex) => acc + ex.sets.length, 0)}セット`,
+          }));
+
+        const cardioItems = cardioLogs.map(c => ({
+          type: 'cardio' as const,
+          id: c.id,
+          date: c.endedAt,
+          title: c.cardioTypeName,
+          subtitle: `${c.distanceKm > 0 ? `${c.distanceKm}km · ` : ''}${c.durationMinutes}分 · ${c.calories}kcal`,
+        }));
+
+        const recentActivities = [...strengthItems, ...cardioItems]
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .slice(0, 4);
+
+        if (recentActivities.length === 0) return null;
+
+        return (
+          <div className="bg-dark-850 border border-dark-800 rounded-3xl p-4 shadow-lg">
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h3 className="text-sm font-bold text-white tracking-tight">
+                直近のトレーニング履歴
+              </h3>
+              <span className="text-[10px] text-slate-400">直近4件</span>
+            </div>
+            <div className="space-y-2">
+              {recentActivities.map((act) => {
+                const isStrength = act.type === 'strength';
+                return (
+                  <div
+                    key={act.id}
+                    className="p-3 rounded-2xl bg-dark-900/60 border border-dark-800 flex items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+                          isStrength
+                            ? 'bg-brand-neon/15 text-brand-neon border border-brand-neon/30'
+                            : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                        }`}
+                      >
+                        {isStrength ? (
+                          <Dumbbell className="w-3.5 h-3.5" />
+                        ) : (
+                          <Activity className="w-3.5 h-3.5" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-bold text-white flex items-center gap-1.5">
+                          <span>{act.title}</span>
+                          <span
+                            className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                              isStrength
+                                ? 'bg-brand-dim text-brand-neon'
+                                : 'bg-amber-500/10 text-amber-400'
+                            }`}
+                          >
+                            {isStrength ? '筋トレ' : '有酸素'}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          {new Date(act.date).toLocaleDateString('ja-JP', {
+                            month: 'numeric',
+                            day: 'numeric',
+                            weekday: 'short',
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-semibold text-slate-300">
+                        {act.subtitle}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs font-semibold text-slate-300">
-                    {s.exercises.length} 種目
-                  </div>
-                  <div className="text-[10px] text-slate-500">
-                    {s.exercises.reduce((acc, ex) => acc + ex.sets.length, 0)} セット
-                  </div>
-                </div>
-              </div>
-            ))}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* メニュー選択モーダル */}
       {isSelectMenuOpen && (

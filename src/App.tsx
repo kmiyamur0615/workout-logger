@@ -133,8 +133,8 @@ export function App() {
     try {
       const data = await GasApiService.fetchSpreadsheetData(settings.gasWebAppUrl);
       if (data) {
+        // 1. 種目マスタの同期（ローカル追加種目とのマージ）
         if (data.exercises) {
-          // ローカルで追加したカスタム種目が消えないようにマージ
           const remoteIds = new Set(data.exercises.map((e: Exercise) => e.id));
           const remoteNames = new Set(data.exercises.map((e: Exercise) => e.name));
           const localCustom = exercises.filter(
@@ -144,8 +144,8 @@ export function App() {
           StorageService.saveExercises(mergedExercises);
           setExercises(mergedExercises);
         }
-        // スケジュールの保護と同期:
-        // ローカルにメニュー設定がある場合はスプレッドシートへアップロードして上書き消失を防止
+
+        // 2. スケジュールの保護と同期
         const hasLocalSchedule = schedule.some(s => s.menuId);
         const hasRemoteSchedule = data.schedule && data.schedule.some((s: WeekdaySchedule) => s.menuId);
 
@@ -155,7 +155,60 @@ export function App() {
           StorageService.saveSchedule(data.schedule);
           setSchedule(data.schedule);
         }
-        alert('スプレッドシートとの同期が完了しました！');
+
+        // 3. 筋トレ履歴 (pastSessions) の双方向同期
+        const remoteSessions: WorkoutSession[] = data.pastSessions || [];
+        const remoteSessionIds = new Set(remoteSessions.map(s => s.id));
+        const localOnlySessions = pastSessions.filter(s => !remoteSessionIds.has(s.id) && s.exercises && s.exercises.length > 0);
+
+        // ローカルにしか存在しないセッションをスプレッドシートへバックアップ
+        for (const localSession of localOnlySessions) {
+          try {
+            await GasApiService.syncWorkoutSession(settings.gasWebAppUrl, localSession);
+          } catch (e) {
+            console.error('ローカルセッションのGAS同期失敗:', e);
+          }
+        }
+
+        // リモートとローカルをマージして時系列降順で保存
+        const mergedSessionsMap = new Map<string, WorkoutSession>();
+        remoteSessions.forEach(s => mergedSessionsMap.set(s.id, s));
+        pastSessions.forEach(s => {
+          if (s.exercises && s.exercises.length > 0) {
+            mergedSessionsMap.set(s.id, s);
+          }
+        });
+        const mergedSessions = Array.from(mergedSessionsMap.values())
+          .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+        
+        StorageService.savePastSessions(mergedSessions);
+        setPastSessions(mergedSessions);
+        setActiveSession(StorageService.getOrCreateTodaySession());
+
+        // 4. 有酸素運動履歴 (cardioLogs) の双方向同期
+        const remoteCardio: CardioLog[] = data.cardioLogs || [];
+        const remoteCardioIds = new Set(remoteCardio.map(c => c.id));
+        const localOnlyCardio = cardioLogs.filter(c => !remoteCardioIds.has(c.id));
+
+        // ローカルにしか存在しない有酸素ログをスプレッドシートへバックアップ
+        for (const localC of localOnlyCardio) {
+          try {
+            await GasApiService.syncCardioLog(settings.gasWebAppUrl, localC);
+          } catch (e) {
+            console.error('ローカル有酸素ログのGAS同期失敗:', e);
+          }
+        }
+
+        const mergedCardioMap = new Map<string, CardioLog>();
+        remoteCardio.forEach(c => mergedCardioMap.set(c.id, c));
+        cardioLogs.forEach(c => mergedCardioMap.set(c.id, c));
+        const mergedCardio = Array.from(mergedCardioMap.values())
+          .sort((a, b) => new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime());
+
+        StorageService.saveCardioLogs(mergedCardio);
+        setCardioLogs(mergedCardio);
+
+        alert('スプレッドシートとの同期が完了しました！（種目・予定・筋トレ・有酸素履歴を最新化）');
       }
     } catch (e: any) {
       alert(`同期エラー: ${e.message || e}`);
@@ -259,6 +312,7 @@ export function App() {
             routineMenus={routineMenus}
             bodyParts={bodyParts}
             pastSessions={pastSessions}
+            cardioLogs={cardioLogs}
             onStartSession={handleStartSession}
             onNavigateToWorkout={() => setCurrentTab('workout')}
             hasActiveSession={hasTodayExercises}

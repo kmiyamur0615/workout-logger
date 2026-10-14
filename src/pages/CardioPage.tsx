@@ -87,13 +87,23 @@ export const CardioPage: React.FC<CardioPageProps> = ({
       try { navigator.vibrate([20, 50, 20]); } catch (_) {}
     }
 
+    const safeEndedAt = (() => {
+      try {
+        const formatted = endedAt.length === 16 ? `${endedAt}:00` : endedAt;
+        const d = new Date(formatted);
+        return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+      } catch (_) {
+        return new Date().toISOString();
+      }
+    })();
+
     const newLog: CardioLog = {
       id: `cardio-${Date.now()}`,
       cardioTypeId: currentType.id,
       cardioTypeName: currentType.name,
       distanceKm: distanceNum,
       durationMinutes: durationNum,
-      endedAt: new Date(endedAt).toISOString(),
+      endedAt: safeEndedAt,
       calories: calculatedCalories,
       note: note.trim() || undefined,
     };

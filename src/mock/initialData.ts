@@ -107,7 +107,7 @@ export const INITIAL_SETTINGS: AppSettings = {
     heightCm: 172,
     weightKg: 68,
   },
-  gasWebAppUrl: '',
+  gasWebAppUrl: 'https://script.google.com/macros/s/AKfycbzp5ZJCHTRw3XvdSulCb7RgbXO3bdMm3jMbSMfO3n4BjlYNOBRU1mlyds2eRbD_Z4_5/exec',
   appleShortcutName: 'WorkoutLoggerSync',
   cardioShortcutName: 'CardioLoggerSync',
   cardioShortcuts: {
