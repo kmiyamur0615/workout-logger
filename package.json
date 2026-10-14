@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "gas:push": "clasp push",
+    "gas:deploy": "clasp deploy",
+    "gas:open": "clasp open"
   },
   "dependencies": {
     "clsx": "^2.1.1",
