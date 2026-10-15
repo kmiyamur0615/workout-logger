@@ -6,7 +6,7 @@ import { WorkoutPage } from './pages/WorkoutPage';
 import { CardioPage } from './pages/CardioPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { StorageService } from './services/storage';
+import { StorageService, normalizeSessionId } from './services/storage';
 import { GasApiService } from './services/gasApi';
 import { 
   WorkoutSession, 
@@ -117,8 +117,10 @@ export function App() {
   };
 
   // 外部連携完了時
+  // 外部連携・記録完了時
   const handleFinishSession = (synced: WorkoutSession) => {
     handleUpdateSession(synced);
+    setCurrentTab('history');
   };
 
   // スプレッドシート同期
@@ -145,23 +147,57 @@ export function App() {
           setExercises(mergedExercises);
         }
 
-        // 2. スケジュールの保護と同期
-        const hasLocalSchedule = schedule.some(s => s.menuId);
-        const hasRemoteSchedule = data.schedule && data.schedule.some((s: WeekdaySchedule) => s.menuId);
-
-        if (hasLocalSchedule) {
-          await GasApiService.syncSchedule(settings.gasWebAppUrl, schedule);
-        } else if (hasRemoteSchedule) {
-          StorageService.saveSchedule(data.schedule);
-          setSchedule(data.schedule);
+        // 2. メニューテンプレートの同期（ローカルとスプレッドシートの統合）
+        const remoteMenus: RoutineMenu[] = data.routineMenus || [];
+        const localMenus = StorageService.getRoutineMenus();
+        if (remoteMenus.length > 0) {
+          const remoteMenuIds = new Set(remoteMenus.map(m => m.id));
+          const localOnlyMenus = localMenus.filter(m => !remoteMenuIds.has(m.id));
+          const mergedMenus = [...remoteMenus, ...localOnlyMenus].sort(
+            (a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)
+          );
+          StorageService.saveRoutineMenus(mergedMenus);
+          setRoutineMenus(mergedMenus);
+          if (localOnlyMenus.length > 0) {
+            await GasApiService.syncMenus(settings.gasWebAppUrl, mergedMenus);
+          }
+        } else if (localMenus.length > 0) {
+          await GasApiService.syncMenus(settings.gasWebAppUrl, localMenus);
         }
 
-        // 3. 筋トレ履歴 (pastSessions) の双方向同期
-        const remoteSessions: WorkoutSession[] = data.pastSessions || [];
-        const remoteSessionIds = new Set(remoteSessions.map(s => s.id));
-        const localOnlySessions = pastSessions.filter(s => !remoteSessionIds.has(s.id) && s.exercises && s.exercises.length > 0);
+        // 3. 曜日別デフォルトスケジュールの同期
+        const remoteSchedule: WeekdaySchedule[] = data.schedule || [];
+        const localSchedule = StorageService.getSchedule();
+        const hasRemoteSchedule = remoteSchedule.some(s => s.menuId);
+        const hasLocalSchedule = localSchedule.some(s => s.menuId);
 
-        // ローカルにしか存在しないセッションをスプレッドシートへバックアップ
+        if (hasRemoteSchedule) {
+          StorageService.saveSchedule(remoteSchedule);
+          setSchedule(remoteSchedule);
+        } else if (hasLocalSchedule) {
+          await GasApiService.syncSchedule(settings.gasWebAppUrl, localSchedule);
+        }
+
+        // 4. 筋トレ履歴 (pastSessions) の双方向同期（session_idを正規化して突合）
+        const remoteSessions: WorkoutSession[] = (data.pastSessions || []).map((s: WorkoutSession) => ({
+          ...s,
+          id: normalizeSessionId(s.id)
+        }));
+        const normLocalSessions = pastSessions.map(s => ({
+          ...s,
+          id: normalizeSessionId(s.id)
+        }));
+
+        const remoteSessionMap = new Map<string, WorkoutSession>();
+        remoteSessions.forEach(s => {
+          if (s.id) remoteSessionMap.set(s.id, s);
+        });
+
+        // リモートにまだ存在しないローカルセッションのみバックアップ
+        const localOnlySessions = normLocalSessions.filter(
+          s => s.id && !remoteSessionMap.has(s.id) && s.exercises && s.exercises.length > 0
+        );
+
         for (const localSession of localOnlySessions) {
           try {
             await GasApiService.syncWorkoutSession(settings.gasWebAppUrl, localSession);
@@ -170,22 +206,32 @@ export function App() {
           }
         }
 
-        // リモートとローカルをマージして時系列降順で保存
+        // リモートとローカルをマージ（エクササイズ数の多い方、最新情報を優先）
         const mergedSessionsMap = new Map<string, WorkoutSession>();
         remoteSessions.forEach(s => mergedSessionsMap.set(s.id, s));
-        pastSessions.forEach(s => {
-          if (s.exercises && s.exercises.length > 0) {
+        normLocalSessions.forEach(s => {
+          if (!s.id) return;
+          const existing = mergedSessionsMap.get(s.id);
+          if (!existing) {
             mergedSessionsMap.set(s.id, s);
+          } else {
+            const existingExCount = existing.exercises ? existing.exercises.length : 0;
+            const localExCount = s.exercises ? s.exercises.length : 0;
+            if (localExCount >= existingExCount && localExCount > 0) {
+              mergedSessionsMap.set(s.id, s);
+            }
           }
         });
+
         const mergedSessions = Array.from(mergedSessionsMap.values())
+          .filter(s => s.id)
           .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
         
         StorageService.savePastSessions(mergedSessions);
         setPastSessions(mergedSessions);
         setActiveSession(StorageService.getOrCreateTodaySession());
 
-        // 4. 有酸素運動履歴 (cardioLogs) の双方向同期
+        // 5. 有酸素運動履歴 (cardioLogs) の双方向同期
         const remoteCardio: CardioLog[] = data.cardioLogs || [];
         const remoteCardioIds = new Set(remoteCardio.map(c => c.id));
         const localOnlyCardio = cardioLogs.filter(c => !remoteCardioIds.has(c.id));
@@ -208,7 +254,7 @@ export function App() {
         StorageService.saveCardioLogs(mergedCardio);
         setCardioLogs(mergedCardio);
 
-        alert('スプレッドシートとの同期が完了しました！（種目・予定・筋トレ・有酸素履歴を最新化）');
+        alert('スプレッドシートとの同期が完了しました！（種目・メニュー・予定・筋トレ・有酸素履歴を最新化）');
       }
     } catch (e: any) {
       alert(`同期エラー: ${e.message || e}`);
@@ -236,13 +282,24 @@ export function App() {
   // メニュー操作
   const handleSaveMenu = (menu: RoutineMenu) => {
     StorageService.saveOrUpdateMenu(menu);
-    setRoutineMenus(StorageService.getRoutineMenus());
+    const updated = StorageService.getRoutineMenus();
+    setRoutineMenus(updated);
+    if (settings.gasWebAppUrl) {
+      GasApiService.syncMenus(settings.gasWebAppUrl, updated).catch(err =>
+        console.error('GASへのメニュー同期に失敗:', err)
+      );
+    }
   };
 
   const handleDeleteMenu = (menuId: string) => {
     const updated = routineMenus.filter(m => m.id !== menuId);
     StorageService.saveRoutineMenus(updated);
     setRoutineMenus(updated);
+    if (settings.gasWebAppUrl) {
+      GasApiService.syncMenus(settings.gasWebAppUrl, updated).catch(err =>
+        console.error('GASへのメニュー削除同期に失敗:', err)
+      );
+    }
   };
 
   const handleUpdateSchedule = (newSchedule: WeekdaySchedule[]) => {

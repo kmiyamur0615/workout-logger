@@ -34,7 +34,21 @@ const KEYS = {
   DATA_VERSION: 'wl_data_version',
 };
 
-const CURRENT_DATA_VERSION = '20261012_v2';
+const CURRENT_DATA_VERSION = '20261015_v3';
+
+export function normalizeSessionId(id?: string): string {
+  if (!id) return '';
+  const str = String(id).trim();
+  const match1 = str.match(/^session-(\d{4})-?(\d{2})-?(\d{2})(.*)$/);
+  if (match1) {
+    return `session-${match1[1]}-${match1[2]}-${match1[3]}${match1[4] || ''}`;
+  }
+  const match2 = str.match(/^(\d{4})-?(\d{2})-?(\d{2})(.*)$/);
+  if (match2) {
+    return `session-${match2[1]}-${match2[2]}-${match2[3]}${match2[4] || ''}`;
+  }
+  return str;
+}
 
 function getStored<T>(key: string, fallback: T): T {
   try {
@@ -56,17 +70,26 @@ function setStored<T>(key: string, value: T): void {
 }
 
 export const StorageService = {
-  // データの自動マイグレーション（過去スクショデータの初回反映等）
+  // データの自動マイグレーション（ユーザー設定や履歴を壊さずキーが未作成の場合のみ初期値を投入）
   initMigration(): void {
     try {
       const currentVer = localStorage.getItem(KEYS.DATA_VERSION);
       if (currentVer !== CURRENT_DATA_VERSION) {
-        // 過去セッションを実データで更新
-        setStored(KEYS.PAST_SESSIONS, INITIAL_PAST_SESSIONS);
-        setStored(KEYS.BODY_PARTS, INITIAL_BODY_PARTS);
-        setStored(KEYS.EXERCISES, INITIAL_EXERCISES);
-        setStored(KEYS.ROUTINE_MENUS, INITIAL_ROUTINE_MENUS);
-        setStored(KEYS.SCHEDULE, INITIAL_SCHEDULE);
+        if (localStorage.getItem(KEYS.PAST_SESSIONS) === null) {
+          setStored(KEYS.PAST_SESSIONS, INITIAL_PAST_SESSIONS);
+        }
+        if (localStorage.getItem(KEYS.BODY_PARTS) === null) {
+          setStored(KEYS.BODY_PARTS, INITIAL_BODY_PARTS);
+        }
+        if (localStorage.getItem(KEYS.EXERCISES) === null) {
+          setStored(KEYS.EXERCISES, INITIAL_EXERCISES);
+        }
+        if (localStorage.getItem(KEYS.ROUTINE_MENUS) === null) {
+          setStored(KEYS.ROUTINE_MENUS, INITIAL_ROUTINE_MENUS);
+        }
+        if (localStorage.getItem(KEYS.SCHEDULE) === null) {
+          setStored(KEYS.SCHEDULE, INITIAL_SCHEDULE);
+        }
         localStorage.setItem(KEYS.DATA_VERSION, CURRENT_DATA_VERSION);
       }
     } catch (e) {
@@ -195,13 +218,30 @@ export const StorageService = {
   // ワークアウト履歴
   getPastSessions(): WorkoutSession[] {
     this.initMigration();
-    return getStored<WorkoutSession[]>(KEYS.PAST_SESSIONS, INITIAL_PAST_SESSIONS);
+    const sessions = getStored<WorkoutSession[]>(KEYS.PAST_SESSIONS, INITIAL_PAST_SESSIONS);
+    return sessions.map(s => ({
+      ...s,
+      id: normalizeSessionId(s.id)
+    }));
   },
   savePastSessions(sessions: WorkoutSession[]): void {
-    setStored(KEYS.PAST_SESSIONS, sessions);
+    const normalized = sessions.map(s => ({
+      ...s,
+      id: normalizeSessionId(s.id)
+    }));
+    const seen = new Set<string>();
+    const unique = normalized.filter(s => {
+      if (!s.id || seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
+    setStored(KEYS.PAST_SESSIONS, unique);
   },
   updatePastSession(session: WorkoutSession): void {
-    const sessions = this.getPastSessions().map(s => s.id === session.id ? session : s);
+    const normId = normalizeSessionId(session.id);
+    const sessions = this.getPastSessions().map(s => 
+      normalizeSessionId(s.id) === normId ? { ...session, id: normId } : s
+    );
     this.savePastSessions(sessions);
   },
   addCompletedSession(session: WorkoutSession): void {
@@ -211,6 +251,7 @@ export const StorageService = {
   // 今日のワークアウトシートを取得（なければ空のシートを生成）
   getOrCreateTodaySession(): WorkoutSession {
     const todayKey = this.getDateKey();
+    const targetSessionId = `session-${todayKey}`;
     const sessions = this.getPastSessions();
 
     // 旧バージョンの実行中セッションが残っていれば引き継ぐ
@@ -221,13 +262,18 @@ export const StorageService = {
       return legacyActive;
     }
 
-    const existingToday = sessions.find(s => this.getDateKey(s.startedAt) === todayKey);
+    const existingToday = sessions.find(s => 
+      this.getDateKey(s.startedAt) === todayKey || normalizeSessionId(s.id) === targetSessionId
+    );
     if (existingToday) {
-      return existingToday;
+      return {
+        ...existingToday,
+        id: normalizeSessionId(existingToday.id)
+      };
     }
 
     return {
-      id: `session-${todayKey}`,
+      id: targetSessionId,
       startedAt: new Date().toISOString(),
       menuName: '本日の筋トレ',
       exercises: [],
@@ -237,15 +283,17 @@ export const StorageService = {
   // 今日のワークアウトを自動保存（種目が1つ以上あれば履歴に自動保存、0なら履歴から除去）
   saveTodaySession(session: WorkoutSession): void {
     const targetDateKey = this.getDateKey(session.startedAt);
+    const normSessionId = normalizeSessionId(session.id);
     const sessions = this.getPastSessions();
     const otherSessions = sessions.filter(
-      s => s.id !== session.id && this.getDateKey(s.startedAt) !== targetDateKey
+      s => normalizeSessionId(s.id) !== normSessionId && this.getDateKey(s.startedAt) !== targetDateKey
     );
 
     if (session.exercises.length > 0) {
       const updatedSession: WorkoutSession = {
         ...session,
-        endedAt: new Date().toISOString(),
+        id: normSessionId,
+        endedAt: session.endedAt || new Date().toISOString(),
       };
       this.savePastSessions([updatedSession, ...otherSessions]);
 

@@ -1,5 +1,5 @@
 /**
- * Workout Logger - Google Apps Script (GAS) バックエンド (v1.3)
+ * Workout Logger - Google Apps Script (GAS) バックエンド (v1.4)
  */
 
 function setupSpreadsheet() {
@@ -33,12 +33,14 @@ function setupSpreadsheet() {
   let menuSheet = ss.getSheetByName('menus');
   if (!menuSheet) {
     menuSheet = ss.insertSheet('menus');
-    menuSheet.appendRow(['menu_id', 'menu_name', 'target_parts', 'sort_order']);
-    menuSheet.getRange(1, 1, 1, 4).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
+    menuSheet.appendRow(['menu_id', 'menu_name', 'target_parts', 'sort_order', 'exercises_json']);
+    menuSheet.getRange(1, 1, 1, 5).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
 
-    menuSheet.appendRow(['menu-chest-arms', '胸・腕 (Push)', '胸・腕', 1]);
-    menuSheet.appendRow(['menu-back', '背中 (Pull)', '背中・肩リア', 2]);
-    menuSheet.appendRow(['menu-legs-lower', '下半身 (Legs)', '脚・カーフ', 3]);
+    menuSheet.appendRow(['menu-chest-arms', '胸・腕 (Push)', '胸・腕', 1, '[]']);
+    menuSheet.appendRow(['menu-back', '背中 (Pull)', '背中・肩リア', 2, '[]']);
+    menuSheet.appendRow(['menu-legs-lower', '下半身 (Legs)', '脚・カーフ', 3, '[]']);
+  } else if (menuSheet.getLastColumn() < 5) {
+    menuSheet.getRange(1, 5).setValue('exercises_json');
   }
 
   // 3. schedule (曜日別デフォルト)
@@ -57,7 +59,7 @@ function setupSpreadsheet() {
     schedSheet.appendRow([6, '土曜日', '']);
   }
 
-  // 4. workouts (セッション履歴) - 時間・総ボリューム列を削除
+  // 4. workouts (セッション履歴)
   let woSheet = ss.getSheetByName('workouts');
   if (!woSheet) {
     woSheet = ss.insertSheet('workouts');
@@ -65,7 +67,7 @@ function setupSpreadsheet() {
     woSheet.getRange(1, 1, 1, 5).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
   }
 
-  // 5. sets (セット履歴) - 種別列を削除し、is_completed列を配置
+  // 5. sets (セット履歴)
   let setSheet = ss.getSheetByName('sets');
   if (!setSheet) {
     setSheet = ss.insertSheet('sets');
@@ -96,10 +98,50 @@ function setupSpreadsheet() {
   Logger.log('スプレッドシートの初期セットアップが完了しました。');
 }
 
+/**
+ * session_id を常に "session-YYYY-MM-DD" 形式に正規化
+ * 例: "session-20261015" -> "session-2026-10-15"
+ *     "session-2026-10-15" -> "session-2026-10-15"
+ *     "20261015" -> "session-2026-10-15"
+ */
+function normalizeSessionId(id) {
+  if (!id) return '';
+  const str = String(id).trim();
+  const match1 = str.match(/^session-(\d{4})-?(\d{2})-?(\d{2})(.*)$/);
+  if (match1) {
+    return 'session-' + match1[1] + '-' + match1[2] + '-' + match1[3] + (match1[4] || '');
+  }
+  const match2 = str.match(/^(\d{4})-?(\d{2})-?(\d{2})(.*)$/);
+  if (match2) {
+    return 'session-' + match2[1] + '-' + match2[2] + '-' + match2[3] + (match2[4] || '');
+  }
+  return str;
+}
+
+function toIsoDateSafe(val, fallbackSessionId) {
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    return val.toISOString();
+  }
+  if (val) {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+  }
+  if (fallbackSessionId) {
+    const m = fallbackSessionId.match(/^session-(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+      return m[1] + '-' + m[2] + '-' + m[3] + 'T09:00:00.000+09:00';
+    }
+  }
+  return new Date().toISOString();
+}
+
 function doGet(e) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
+    // 1. exercises (種目マスタ)
     const exSheet = ss.getSheetByName('exercises');
     const exData = exSheet ? exSheet.getDataRange().getValues() : [];
     const exercises = [];
@@ -116,6 +158,30 @@ function doGet(e) {
       }
     }
 
+    // 2. routineMenus (メニューテンプレートマスタ)
+    const menuSheet = ss.getSheetByName('menus');
+    const menuData = menuSheet ? menuSheet.getDataRange().getValues() : [];
+    const routineMenus = [];
+    for (let i = 1; i < menuData.length; i++) {
+      const row = menuData[i];
+      const mId = String(row[0] || '').trim();
+      if (!mId) continue;
+      let menuExercises = [];
+      if (row[4]) {
+        try {
+          menuExercises = JSON.parse(String(row[4]));
+        } catch (_) {}
+      }
+      routineMenus.push({
+        id: mId,
+        name: String(row[1] || 'メニュー'),
+        targetParts: String(row[2] || ''),
+        sortOrder: Number(row[3]) || i,
+        exercises: menuExercises
+      });
+    }
+
+    // 3. schedule (曜日別デフォルト)
     const schedSheet = ss.getSheetByName('schedule');
     const schedData = schedSheet ? schedSheet.getDataRange().getValues() : [];
     const schedule = [];
@@ -127,7 +193,7 @@ function doGet(e) {
       });
     }
 
-    // 3. workouts & sets (筋トレ履歴)
+    // 4. workouts & sets (筋トレ履歴) - session_idを正規化して突合
     const woSheet = ss.getSheetByName('workouts');
     const woData = woSheet ? woSheet.getDataRange().getValues() : [];
     const setSheet = ss.getSheetByName('sets');
@@ -136,27 +202,43 @@ function doGet(e) {
     const setsBySession = {};
     for (let i = 1; i < setData.length; i++) {
       const row = setData[i];
-      const sId = String(row[0] || '').trim();
+      const sId = normalizeSessionId(row[0]);
       if (!sId) continue;
       if (!setsBySession[sId]) setsBySession[sId] = [];
+
+      const exName = String(row[1] || '種目').trim();
+      const setNum = Number(row[2]) || 1;
+      const weight = Number(row[3]) || 0;
+      const reps = Number(row[4]) || 0;
+      const completedAt = toIsoDateSafe(row[6], sId);
+
+      // 同一セットの二重登録防止
+      const isDuplicate = setsBySession[sId].some(function(existing) {
+        return existing.exerciseName === exName && existing.setNumber === setNum && existing.weight === weight && existing.reps === reps;
+      });
+      if (isDuplicate) continue;
+
       setsBySession[sId].push({
         sessionId: sId,
-        exerciseName: String(row[1] || '種目'),
-        setNumber: Number(row[2]) || 1,
-        weight: Number(row[3]) || 0,
-        reps: Number(row[4]) || 0,
+        exerciseName: exName,
+        setNumber: setNum,
+        weight: weight,
+        reps: reps,
         isCompleted: String(row[5]).toUpperCase() === 'TRUE',
-        completedAt: row[6] ? (row[6] instanceof Date ? row[6].toISOString() : String(row[6])) : ''
+        completedAt: completedAt
       });
     }
 
     const pastSessions = [];
+    const processedSessionIds = {};
+
     for (let i = 1; i < woData.length; i++) {
       const row = woData[i];
-      const sId = String(row[0] || '').trim();
-      if (!sId) continue;
-      const rawSets = setsBySession[sId] || [];
+      const sId = normalizeSessionId(row[0]);
+      if (!sId || processedSessionIds[sId]) continue;
+      processedSessionIds[sId] = true;
 
+      const rawSets = setsBySession[sId] || [];
       const exerciseMap = {};
       const exList = [];
       rawSets.forEach((s, idx) => {
@@ -182,8 +264,8 @@ function doGet(e) {
         });
       });
 
-      const startedAt = row[1] instanceof Date ? row[1].toISOString() : String(row[1] || '');
-      const endedAt = row[2] ? (row[2] instanceof Date ? row[2].toISOString() : String(row[2])) : undefined;
+      const startedAt = toIsoDateSafe(row[1], sId);
+      const endedAt = row[2] ? toIsoDateSafe(row[2], sId) : undefined;
 
       pastSessions.push({
         id: sId,
@@ -196,7 +278,50 @@ function doGet(e) {
       });
     }
 
-    // 4. cardio_logs (有酸素運動ログ)
+    // workoutsシートに未登録だがsetsシートにあるセッションも救出
+    for (const sId in setsBySession) {
+      if (!processedSessionIds[sId]) {
+        processedSessionIds[sId] = true;
+        const rawSets = setsBySession[sId];
+        const exerciseMap = {};
+        const exList = [];
+        rawSets.forEach((s, idx) => {
+          if (!exerciseMap[s.exerciseName]) {
+            const exObj = {
+              id: 'we-' + sId + '-' + (exList.length + 1),
+              exerciseId: 'ex-custom-' + s.exerciseName,
+              exerciseName: s.exerciseName,
+              bodyPartId: 'other',
+              orderIndex: exList.length + 1,
+              sets: []
+            };
+            exerciseMap[s.exerciseName] = exObj;
+            exList.push(exObj);
+          }
+          exerciseMap[s.exerciseName].sets.push({
+            id: 's-' + sId + '-' + (idx + 1),
+            setNumber: s.setNumber,
+            weight: s.weight,
+            reps: s.reps,
+            isCompleted: s.isCompleted,
+            completedAt: s.completedAt
+          });
+        });
+
+        const startedAt = toIsoDateSafe('', sId);
+
+        pastSessions.push({
+          id: sId,
+          startedAt: startedAt,
+          menuName: '筋トレ',
+          note: '',
+          isSyncedWithGAS: true,
+          exercises: exList
+        });
+      }
+    }
+
+    // 5. cardio_logs (有酸素運動ログ)
     const clSheet = ss.getSheetByName('cardio_logs');
     const clData = clSheet ? clSheet.getDataRange().getValues() : [];
     const cardioLogs = [];
@@ -204,7 +329,7 @@ function doGet(e) {
       const row = clData[i];
       const cId = String(row[0] || '').trim();
       if (!cId) continue;
-      const endedAt = row[5] instanceof Date ? row[5].toISOString() : String(row[5] || '');
+      const endedAt = toIsoDateSafe(row[5]);
       cardioLogs.push({
         id: cId,
         cardioTypeId: 'cardio-custom',
@@ -220,6 +345,7 @@ function doGet(e) {
     const result = {
       status: 'success',
       exercises: exercises,
+      routineMenus: routineMenus,
       schedule: schedule,
       pastSessions: pastSessions,
       cardioLogs: cardioLogs
@@ -238,61 +364,64 @@ function doPost(e) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const data = JSON.parse(e.postData.contents);
 
-    // 筋トレワークアウトの保存（重複時は既存を更新）
+    // 筋トレワークアウトの保存（重複時は既存を更新・正規化session_id利用）
     if (data.action === 'SAVE_WORKOUT') {
       const session = data.session;
+      const normSessionId = normalizeSessionId(session.id);
       const sets = data.sets || [];
 
       const woSheet = ss.getSheetByName('workouts') || ss.insertSheet('workouts');
       const woData = woSheet.getDataRange().getValues();
       let existingWoRow = -1;
       for (let i = 1; i < woData.length; i++) {
-        if (String(woData[i][0]).trim() === session.id) {
+        if (normalizeSessionId(woData[i][0]) === normSessionId) {
           existingWoRow = i + 1;
           break;
         }
       }
 
+      const rowValues = [
+        normSessionId,
+        session.startedAt,
+        session.endedAt || new Date().toISOString(),
+        session.menuName || '筋トレ',
+        session.note || ''
+      ];
+
       if (existingWoRow > 0) {
-        woSheet.getRange(existingWoRow, 1, 1, 5).setValues([[
-          session.id,
-          session.startedAt,
-          session.endedAt,
-          session.menuName,
-          session.note || ''
-        ]]);
+        woSheet.getRange(existingWoRow, 1, 1, 5).setValues([rowValues]);
       } else {
-        woSheet.appendRow([
-          session.id,
-          session.startedAt,
-          session.endedAt,
-          session.menuName,
-          session.note || ''
-        ]);
+        woSheet.appendRow(rowValues);
       }
 
+      // setsシートの更新（高速一括処理: deleteRowループを排除）
       const setSheet = ss.getSheetByName('sets') || ss.insertSheet('sets');
-      // 既存の同一sessionIdのセット行を削除して再登録
       const setData = setSheet.getDataRange().getValues();
-      for (let i = setData.length - 1; i >= 1; i--) {
-        if (String(setData[i][0]).trim() === session.id) {
-          setSheet.deleteRow(i + 1);
+      const remainingSets = [];
+      for (let i = 1; i < setData.length; i++) {
+        if (normalizeSessionId(setData[i][0]) !== normSessionId && setData[i][0]) {
+          remainingSets.push(setData[i]);
         }
       }
 
-      if (sets.length > 0) {
-        const rowsToAdd = sets.map(function(s) {
-          return [
-            s.sessionId,
-            s.exerciseName,
-            s.setNumber,
-            s.weight,
-            s.reps,
-            s.isCompleted ? 'TRUE' : 'FALSE',
-            s.completedAt
-          ];
-        });
-        setSheet.getRange(setSheet.getLastRow() + 1, 1, rowsToAdd.length, 7).setValues(rowsToAdd);
+      const rowsToAdd = sets.map(function(s) {
+        return [
+          normSessionId,
+          s.exerciseName,
+          s.setNumber,
+          s.weight,
+          s.reps,
+          s.isCompleted ? 'TRUE' : 'FALSE',
+          s.completedAt || new Date().toISOString()
+        ];
+      });
+
+      const allSetRows = remainingSets.concat(rowsToAdd);
+      if (setData.length > 1) {
+        setSheet.getRange(2, 1, setData.length - 1, 7).clearContent();
+      }
+      if (allSetRows.length > 0) {
+        setSheet.getRange(2, 1, allSetRows.length, 7).setValues(allSetRows);
       }
 
       return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
@@ -312,26 +441,20 @@ function doPost(e) {
         }
       }
 
+      const rowValues = [
+        cardio.id,
+        cardio.cardioTypeName,
+        cardio.distanceKm,
+        cardio.durationMinutes,
+        cardio.calories,
+        cardio.endedAt,
+        cardio.note || ''
+      ];
+
       if (existingClRow > 0) {
-        clSheet.getRange(existingClRow, 1, 1, 7).setValues([[
-          cardio.id,
-          cardio.cardioTypeName,
-          cardio.distanceKm,
-          cardio.durationMinutes,
-          cardio.calories,
-          cardio.endedAt,
-          cardio.note || ''
-        ]]);
+        clSheet.getRange(existingClRow, 1, 1, 7).setValues([rowValues]);
       } else {
-        clSheet.appendRow([
-          cardio.id,
-          cardio.cardioTypeName,
-          cardio.distanceKm,
-          cardio.durationMinutes,
-          cardio.calories,
-          cardio.endedAt,
-          cardio.note || ''
-        ]);
+        clSheet.appendRow(rowValues);
       }
 
       return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
@@ -368,6 +491,31 @@ function doPost(e) {
       });
       if (rows.length > 0) {
         schedSheet.getRange(2, 1, rows.length, 3).setValues(rows);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // メニューテンプレートの保存
+    if (data.action === 'SAVE_MENUS') {
+      const routineMenus = data.routineMenus || [];
+      const menuSheet = ss.getSheetByName('menus') || ss.insertSheet('menus');
+      const lastRow = menuSheet.getLastRow();
+      if (lastRow > 1) {
+        menuSheet.getRange(2, 1, lastRow - 1, 5).clearContent();
+      }
+      const rows = routineMenus.map(function(m, idx) {
+        return [
+          m.id,
+          m.name,
+          m.targetParts || '',
+          m.sortOrder !== undefined ? m.sortOrder : idx + 1,
+          JSON.stringify(m.exercises || [])
+        ];
+      });
+      if (rows.length > 0) {
+        menuSheet.getRange(2, 1, rows.length, 5).setValues(rows);
       }
 
       return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))

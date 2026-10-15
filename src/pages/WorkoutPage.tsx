@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, Dumbbell, CheckCircle2, X, Sparkles, Share2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Dumbbell, CheckCircle2, X, Sparkles, Check, Smartphone } from 'lucide-react';
 import { WorkoutSession, WorkoutExercise, WorkoutSet, Exercise, BodyPart, EquipmentType, RoutineMenu } from '../types';
 import { ExerciseCard } from '../components/ExerciseCard';
 import { WorkoutModal } from '../components/WorkoutModal';
@@ -42,6 +42,18 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
   const [isMenuPickerOpen, setIsMenuPickerOpen] = useState(false);
   const [selectedBodyPartFilter, setSelectedBodyPartFilter] = useState<string>('all');
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // 筋トレ記録・保存用の状態
+  const [note, setNote] = useState(session.note || '');
+  const [syncToHealth, setSyncToHealth] = useState(true);
+  const [isSavedSuccess, setIsSavedSuccess] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+
+  useEffect(() => {
+    if (session.note !== undefined && session.note !== note) {
+      setNote(session.note || '');
+    }
+  }, [session.note]);
 
   // 新規種目作成フォーム状態
   const [isCreatingExercise, setIsCreatingExercise] = useState(false);
@@ -255,6 +267,50 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
     setIsModalOpen(false);
   };
 
+  // 筋トレ内容を明示的に記録・保存（GAS送信・Appleヘルスケア連携後に履歴へ遷移）
+  const handleRecordWorkout = async () => {
+    if (isRecording || isSavedSuccess) return;
+    setIsRecording(true);
+
+    const endedAt = new Date().toISOString();
+    const finalSession: WorkoutSession = {
+      ...session,
+      endedAt,
+      note: note.trim() || session.note || '',
+      isSyncedWithGAS: session.isSyncedWithGAS || false,
+      isSyncedWithHealth: syncToHealth,
+    };
+
+    const settings = StorageService.getSettings();
+
+    try {
+      if (settings.gasWebAppUrl) {
+        const gasOk = await GasApiService.syncWorkoutSession(settings.gasWebAppUrl, finalSession);
+        finalSession.isSyncedWithGAS = gasOk;
+      }
+
+      if (syncToHealth) {
+        HealthSyncService.triggerShortcut(finalSession, settings.appleShortcutName);
+      }
+
+      onUpdateSession(finalSession);
+      setIsSavedSuccess(true);
+
+      setTimeout(() => {
+        onFinishSession(finalSession);
+      }, 500);
+    } catch (e) {
+      console.error('筋トレ記録エラー:', e);
+      onUpdateSession(finalSession);
+      setIsSavedSuccess(true);
+      setTimeout(() => {
+        onFinishSession(finalSession);
+      }, 500);
+    } finally {
+      setIsRecording(false);
+    }
+  };
+
   const totalSetsCount = session.exercises.reduce((acc, ex) => acc + ex.sets.length, 0);
   const todayFormatted = new Date().toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' });
 
@@ -295,12 +351,31 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
           {session.exercises.length > 0 && (
             <button
               type="button"
-              onClick={() => setIsModalOpen(true)}
-              className="py-2 px-3 rounded-xl bg-brand-neon/15 hover:bg-brand-neon/25 active:scale-95 text-brand-neon border border-brand-neon/30 font-bold text-[11px] tracking-wide transition-all flex items-center gap-1"
-              title="ヘルスケア・シートへ送信"
+              onClick={handleRecordWorkout}
+              disabled={isRecording || isSavedSuccess}
+              className={`py-2 px-3.5 rounded-xl font-black text-[11px] tracking-wide transition-all flex items-center gap-1.5 active:scale-95 shadow-md ${
+                isSavedSuccess
+                  ? 'bg-green-500 text-dark-950 shadow-green-500/25'
+                  : 'bg-brand-neon hover:bg-green-400 text-dark-950 shadow-brand-neon/20'
+              }`}
+              title="筋トレを記録して保存"
             >
-              <Share2 className="w-3 h-3" />
-              <span>外部連携</span>
+              {isSavedSuccess ? (
+                <>
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>記録完了</span>
+                </>
+              ) : isRecording ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-dark-950 border-t-transparent rounded-full animate-spin" />
+                  <span>保存中</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>記録する</span>
+                </>
+              )}
             </button>
           )}
         </div>
@@ -372,11 +447,86 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
           <button
             type="button"
             onClick={() => setIsAddExerciseOpen(true)}
-            className="w-full py-3.5 rounded-2xl bg-dark-800 hover:bg-dark-750 active:scale-98 text-slate-200 font-bold text-sm border border-dark-700/80 transition-all flex items-center justify-center gap-2 mb-6"
+            className="w-full py-3.5 rounded-2xl bg-dark-800 hover:bg-dark-750 active:scale-98 text-slate-200 font-bold text-sm border border-dark-700/80 transition-all flex items-center justify-center gap-2 mb-4"
           >
             <Plus className="w-4 h-4 text-brand-neon" />
             <span>種目を追加する</span>
           </button>
+
+          {/* 筋トレ記録・保存カード (有酸素運動と同様の保存UX) */}
+          <div className="bg-dark-850 border border-dark-800 rounded-3xl p-4 space-y-3.5 mb-6 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Dumbbell className="w-4 h-4 text-brand-neon" />
+                <span>ワークアウトの記録</span>
+              </div>
+              <div className="text-[11px] text-slate-400">
+                {session.exercises.length}種目 · {totalSetsCount}セット
+              </div>
+            </div>
+
+            {/* メモ入力 */}
+            <div>
+              <input
+                type="text"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="メモ (任意: 体調、追い込み具合など)"
+                className="w-full bg-dark-900 border border-dark-750 rounded-2xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-neon"
+              />
+            </div>
+
+            {/* Appleヘルスケア連携トグル */}
+            <div className="flex items-center justify-between px-3 py-2 bg-dark-900/70 rounded-2xl border border-dark-750">
+              <div className="flex items-center gap-2">
+                <Smartphone className={`w-4 h-4 transition-colors ${syncToHealth ? 'text-brand-neon' : 'text-slate-500'}`} />
+                <span className="text-xs font-medium text-slate-300">Appleヘルスケアに連携</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSyncToHealth(!syncToHealth)}
+                className={`w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 active:scale-95 ${
+                  syncToHealth ? 'bg-brand-neon' : 'bg-dark-750'
+                }`}
+                aria-label="Appleヘルスケア連携の切り替え"
+              >
+                <span
+                  className={`block w-5 h-5 rounded-full bg-dark-950 transition-transform ${
+                    syncToHealth ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* メイン保存・記録ボタン */}
+            <button
+              type="button"
+              onClick={handleRecordWorkout}
+              disabled={isRecording || isSavedSuccess}
+              className={`w-full py-4 rounded-2xl font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-xl active:scale-98 ${
+                isSavedSuccess
+                  ? 'bg-green-500 text-dark-950 shadow-green-500/25'
+                  : 'bg-brand-neon hover:bg-green-400 text-dark-950 shadow-brand-neon/25'
+              }`}
+            >
+              {isSavedSuccess ? (
+                <>
+                  <Check className="w-5 h-5 stroke-[3]" />
+                  <span>記録しました！履歴に保存中...</span>
+                </>
+              ) : isRecording ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-dark-950 border-t-transparent rounded-full animate-spin" />
+                  <span>記録・送信中...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-5 h-5 stroke-[2.5]" />
+                  <span>筋トレを記録</span>
+                </>
+              )}
+            </button>
+          </div>
         </>
       )}
 
