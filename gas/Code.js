@@ -137,9 +137,67 @@ function toIsoDateSafe(val, fallbackSessionId) {
   return new Date().toISOString();
 }
 
+/**
+ * 既存のスプレッドシート内の表記ゆれ (session-20261010 等) を
+ * 一括で正規化形式 (session-2026-10-10) に書き換えるマイグレーション関数
+ */
+function migrateExistingSessionIds() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let updatedWorkouts = 0;
+  let updatedSets = 0;
+
+  // 1. workouts シートの session_id を一括置換
+  const woSheet = ss.getSheetByName('workouts');
+  if (woSheet) {
+    const data = woSheet.getDataRange().getValues();
+    let changed = false;
+    for (let i = 1; i < data.length; i++) {
+      const orig = String(data[i][0] || '').trim();
+      const norm = normalizeSessionId(orig);
+      if (norm && norm !== orig) {
+        data[i][0] = norm;
+        changed = true;
+        updatedWorkouts++;
+      }
+    }
+    if (changed) {
+      woSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+    }
+  }
+
+  // 2. sets シートの session_id を一括置換
+  const setSheet = ss.getSheetByName('sets');
+  if (setSheet) {
+    const data = setSheet.getDataRange().getValues();
+    let changed = false;
+    for (let i = 1; i < data.length; i++) {
+      const orig = String(data[i][0] || '').trim();
+      const norm = normalizeSessionId(orig);
+      if (norm && norm !== orig) {
+        data[i][0] = norm;
+        changed = true;
+        updatedSets++;
+      }
+    }
+    if (changed) {
+      setSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+    }
+  }
+
+  Logger.log('Migration completed: ' + updatedWorkouts + ' workouts, ' + updatedSets + ' sets updated.');
+  return { updatedWorkouts: updatedWorkouts, updatedSets: updatedSets };
+}
+
 function doGet(e) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 表記ゆれ一括マイグレーションのリクエスト時
+    if (e && e.parameter && e.parameter.action === 'MIGRATE_SESSION_IDS') {
+      const migResult = migrateExistingSessionIds();
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success', migration: migResult }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
 
     // 1. exercises (種目マスタ)
     const exSheet = ss.getSheetByName('exercises');
@@ -519,6 +577,13 @@ function doPost(e) {
       }
 
       return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 既存セッションIDの表記ゆれ一括マイグレーション
+    if (data.action === 'MIGRATE_SESSION_IDS') {
+      const migResult = migrateExistingSessionIds();
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success', migration: migResult }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
