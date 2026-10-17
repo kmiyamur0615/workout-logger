@@ -283,32 +283,30 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
 
     const settings = StorageService.getSettings();
 
+    // まずローカルストレージへ即時保存
+    onUpdateSession(finalSession);
+
     try {
       if (settings.gasWebAppUrl) {
         const gasOk = await GasApiService.syncWorkoutSession(settings.gasWebAppUrl, finalSession);
         finalSession.isSyncedWithGAS = gasOk;
+        onUpdateSession(finalSession);
       }
-
-      if (syncToHealth) {
-        HealthSyncService.triggerShortcut(finalSession, settings.appleShortcutName);
-      }
-
-      onUpdateSession(finalSession);
-      setIsSavedSuccess(true);
-
-      setTimeout(() => {
-        onFinishSession(finalSession);
-      }, 500);
     } catch (e) {
       console.error('筋トレ記録エラー:', e);
-      onUpdateSession(finalSession);
-      setIsSavedSuccess(true);
-      setTimeout(() => {
-        onFinishSession(finalSession);
-      }, 500);
     } finally {
       setIsRecording(false);
     }
+
+    setIsSavedSuccess(true);
+
+    if (syncToHealth) {
+      HealthSyncService.triggerShortcut(finalSession, settings.appleShortcutName);
+    }
+
+    setTimeout(() => {
+      onFinishSession(finalSession);
+    }, 500);
   };
 
   const totalSetsCount = session.exercises.reduce((acc, ex) => acc + ex.sets.length, 0);

@@ -1,17 +1,56 @@
 import { WorkoutSession, CardioLog, AppSettings } from '../types';
+import { StorageService } from './storage';
 
 export const HealthSyncService = {
   // 筋トレ用ショートカット呼び出しURLの生成
   buildShortcutUrl(session: WorkoutSession, shortcutName: string = 'WorkoutLoggerSync'): string {
-    const startedAt = new Date(session.startedAt);
-    const endedAt = session.endedAt ? new Date(session.endedAt) : new Date();
-    const durationMinutes = Math.max(1, Math.round((endedAt.getTime() - startedAt.getTime()) / 60000));
+    const now = new Date();
+    const rawEndedAt = session.endedAt ? new Date(session.endedAt) : now;
+    // 終了時刻が未来にならないよう現在時刻以下に丸める
+    const endedAt = isNaN(rawEndedAt.getTime()) || rawEndedAt.getTime() > now.getTime() ? now : rawEndedAt;
+
+    const rawStartedAt = new Date(session.startedAt);
+    const totalSets = (session.exercises || []).reduce(
+      (sum, ex) => sum + (ex.sets ? ex.sets.length : 0),
+      0
+    );
+    const estimatedMinutesFromSets = Math.max(10, totalSets * 2);
+
+    let durationMinutes = estimatedMinutesFromSets;
+    if (!isNaN(rawStartedAt.getTime())) {
+      const diffMin = Math.floor((endedAt.getTime() - rawStartedAt.getTime()) / 60000);
+      // 3分〜120分の範囲内なら実測時間を採用、短すぎる一括入力や放置時はセット数ベースで算出
+      if (diffMin >= 3 && diffMin <= 120) {
+        durationMinutes = diffMin;
+      }
+    }
+    durationMinutes = Math.max(1, Number(durationMinutes) || 15);
+
+    // endDate が未来になって HealthKit エラーになるのを防ぐため、endedAt から逆算して startDate を確定
+    const startedAt = new Date(endedAt.getTime() - durationMinutes * 60000);
+    const startDate = startedAt.toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const endDate = endedAt.toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+    // 筋トレの推定消費カロリー算出 (METs 4.5 基準)
+    let weightKg = 68;
+    try {
+      weightKg = StorageService.getSettings().profile?.weightKg || 68;
+    } catch (_) {}
+    const caloriesNum = Math.max(15, Math.round(4.5 * weightKg * (durationMinutes / 60) * 1.05));
 
     const payload = {
-      workoutType: "Traditional Strength Training",
-      startDate: startedAt.toISOString().replace(/\.\d{3}Z$/, "Z"),
+      workoutType: 'Traditional Strength Training',
+      cardioTypeName: session.menuName || '筋トレ',
+      menuName: session.menuName || 'ワークアウト',
+      startDate: startDate,
+      endDate: endDate,
       durationMinutes: durationMinutes,
-      menuName: session.menuName || "ワークアウト",
+      calories: caloriesNum,
+      distanceKm: 0,
+      // ショートカット側の表記揺れ・簡略指定用エイリアス（有酸素運動と完全共通化）
+      duration: durationMinutes,
+      calorie: caloriesNum,
+      distance: 0,
     };
 
     const jsonString = JSON.stringify(payload);
