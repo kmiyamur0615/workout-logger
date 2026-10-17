@@ -1,6 +1,42 @@
 /**
- * Workout Logger - Google Apps Script (GAS) バックエンド (v1.4)
+ * Workout Logger - Google Apps Script (GAS) バックエンド (v1.6)
  */
+
+const STANDARD_EXERCISES = [
+  { id: 'ex-bench-press', bodyPartId: 'chest', name: 'ベンチプレス', equipment: 'BARBELL' },
+  { id: 'ex-incline-bench-press', bodyPartId: 'chest', name: 'インクラインベンチプレス', equipment: 'BARBELL' },
+  { id: 'ex-dumbbell-press', bodyPartId: 'chest', name: 'ダンベルプレス', equipment: 'DUMBBELL' },
+  { id: 'ex-pec-fly', bodyPartId: 'chest', name: 'ペックフライ (チェストフライ)', equipment: 'MACHINE' },
+  { id: 'ex-dips', bodyPartId: 'chest', name: 'ディップス', equipment: 'BODYWEIGHT' },
+  { id: 'ex-deadlift', bodyPartId: 'back', name: 'デッドリフト', equipment: 'BARBELL' },
+  { id: 'ex-lat-pulldown', bodyPartId: 'back', name: 'ラットプルダウン', equipment: 'MACHINE' },
+  { id: 'ex-seated-row', bodyPartId: 'back', name: 'シーテッドロー', equipment: 'CABLE' },
+  { id: 'ex-assisted-chinup', bodyPartId: 'back', name: 'アシストチンニング', equipment: 'MACHINE' },
+  { id: 'ex-chinup', bodyPartId: 'back', name: 'チンニング (懸垂)', equipment: 'BODYWEIGHT' },
+  { id: 'ex-dumbbell-row', bodyPartId: 'back', name: 'ダンベルローイング', equipment: 'DUMBBELL' },
+  { id: 'ex-bent-over-row', bodyPartId: 'back', name: 'ベントオーバー バーベルロー', equipment: 'BARBELL' },
+  { id: 'ex-squat', bodyPartId: 'legs', name: 'バーベル スクワット', equipment: 'BARBELL' },
+  { id: 'ex-leg-press', bodyPartId: 'legs', name: 'レッグプレス', equipment: 'MACHINE' },
+  { id: 'ex-leg-curl', bodyPartId: 'legs', name: 'レッグカール', equipment: 'MACHINE' },
+  { id: 'ex-calf-press', bodyPartId: 'legs', name: 'カーフプレス', equipment: 'MACHINE' },
+  { id: 'ex-leg-extension', bodyPartId: 'legs', name: 'レッグエクステンション', equipment: 'MACHINE' },
+  { id: 'ex-shoulder-press', bodyPartId: 'shoulders', name: 'ショルダープレス', equipment: 'MACHINE' },
+  { id: 'ex-face-pull', bodyPartId: 'shoulders', name: 'ケーブルフェイスプル', equipment: 'CABLE' },
+  { id: 'ex-shoulder-shrug', bodyPartId: 'shoulders', name: 'ショルダーシュラグ', equipment: 'BARBELL' },
+  { id: 'ex-side-raise', bodyPartId: 'shoulders', name: 'サイドレイズ', equipment: 'DUMBBELL' },
+  { id: 'ex-cable-pushdown', bodyPartId: 'arms', name: 'ケーブルプレスダウン', equipment: 'CABLE' },
+  { id: 'ex-dumbbell-wrist-curl', bodyPartId: 'arms', name: 'ダンベルリストカール', equipment: 'DUMBBELL' },
+  { id: 'ex-barbell-curl', bodyPartId: 'arms', name: 'バーベル アームカール', equipment: 'BARBELL' },
+  { id: 'ex-cable-crunch', bodyPartId: 'abs', name: 'ケーブルクランチ', equipment: 'CABLE' },
+  { id: 'ex-hanging-leg-raise', bodyPartId: 'abs', name: 'ハンギング レッグレイズ', equipment: 'BODYWEIGHT' }
+];
+
+function normalizeNameKey(name) {
+  return String(name || '')
+    .replace(/[\s　]+/g, '')
+    .replace(/\(.*?\)|（.*?）/g, '')
+    .trim();
+}
 
 function setupSpreadsheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -11,22 +47,9 @@ function setupSpreadsheet() {
     exSheet = ss.insertSheet('exercises');
     exSheet.appendRow(['exercise_id', 'body_part', 'exercise_name', 'equipment', 'note']);
     exSheet.getRange(1, 1, 1, 5).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
-    
-    exSheet.appendRow(['ex-bench-press', 'chest', 'ベンチプレス', 'BARBELL', '']);
-    exSheet.appendRow(['ex-incline-bench-press', 'chest', 'インクラインベンチプレス', 'BARBELL', '']);
-    exSheet.appendRow(['ex-deadlift', 'back', 'デッドリフト', 'BARBELL', '']);
-    exSheet.appendRow(['ex-lat-pulldown', 'back', 'ラットプルダウン', 'MACHINE', '']);
-    exSheet.appendRow(['ex-seated-row', 'back', 'シーテッドロー', 'CABLE', '']);
-    exSheet.appendRow(['ex-assisted-chinup', 'back', 'アシストチンニング', 'MACHINE', '']);
-    exSheet.appendRow(['ex-dumbbell-row', 'back', 'ダンベルローイング', 'DUMBBELL', '']);
-    exSheet.appendRow(['ex-leg-press', 'legs', 'レッグプレス', 'MACHINE', '']);
-    exSheet.appendRow(['ex-leg-curl', 'legs', 'レッグカール', 'MACHINE', '']);
-    exSheet.appendRow(['ex-calf-press', 'legs', 'カーフプレス', 'MACHINE', '']);
-    exSheet.appendRow(['ex-shoulder-press', 'shoulders', 'ショルダープレス', 'MACHINE', '']);
-    exSheet.appendRow(['ex-face-pull', 'shoulders', 'ケーブルフェイスプル', 'CABLE', '']);
-    exSheet.appendRow(['ex-shoulder-shrug', 'shoulders', 'ショルダーシュラグ', 'BARBELL', '']);
-    exSheet.appendRow(['ex-cable-pushdown', 'arms', 'ケーブルプレスダウン', 'CABLE', '']);
-    exSheet.appendRow(['ex-dumbbell-wrist-curl', 'arms', 'ダンベルリストカール', 'DUMBBELL', '']);
+    STANDARD_EXERCISES.forEach(function(ex) {
+      exSheet.appendRow([ex.id, ex.bodyPartId, ex.name, ex.equipment, '']);
+    });
   }
 
   // 2. menus (メニューマスタ)
@@ -100,9 +123,6 @@ function setupSpreadsheet() {
 
 /**
  * session_id を常に "session-YYYY-MM-DD" 形式に正規化
- * 例: "session-20261015" -> "session-2026-10-15"
- *     "session-2026-10-15" -> "session-2026-10-15"
- *     "20261015" -> "session-2026-10-15"
  */
 function normalizeSessionId(id) {
   if (!id) return '';
@@ -138,34 +158,66 @@ function toIsoDateSafe(val, fallbackSessionId) {
 }
 
 /**
- * 既存のスプレッドシート内の表記ゆれ (session-20261010 等) を
- * 一括で正規化形式 (session-2026-10-10) に書き換えるマイグレーション関数
+ * スプレッドシート内のデータ整合性マイグレーション
  */
 function migrateExistingSessionIds() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let updatedWorkouts = 0;
   let updatedSets = 0;
+  let dedupedCardio = 0;
+  let addedExercises = 0;
+  let updatedMenus = 0;
 
-  // 1. workouts シートの session_id を一括置換
+  // 1. exercises シートに標準種目が不足していれば追加
+  const exSheet = ss.getSheetByName('exercises');
+  if (exSheet) {
+    const exData = exSheet.getDataRange().getValues();
+    const existingIds = {};
+    const existingNames = {};
+    for (let i = 1; i < exData.length; i++) {
+      if (exData[i][0]) {
+        existingIds[String(exData[i][0])] = true;
+        existingNames[normalizeNameKey(exData[i][2])] = true;
+      }
+    }
+    STANDARD_EXERCISES.forEach(function(std) {
+      if (!existingIds[std.id] && !existingNames[normalizeNameKey(std.name)]) {
+        exSheet.appendRow([std.id, std.bodyPartId, std.name, std.equipment, '']);
+        addedExercises++;
+      }
+    });
+  }
+
+  // 2. workouts シートの session_id を一括置換 ＆ 重複行排除
   const woSheet = ss.getSheetByName('workouts');
   if (woSheet) {
     const data = woSheet.getDataRange().getValues();
+    const seenSessions = {};
+    const cleanRows = [data[0]];
     let changed = false;
     for (let i = 1; i < data.length; i++) {
       const orig = String(data[i][0] || '').trim();
+      if (!orig) continue;
       const norm = normalizeSessionId(orig);
-      if (norm && norm !== orig) {
+      if (norm !== orig) {
         data[i][0] = norm;
         changed = true;
         updatedWorkouts++;
       }
+      if (seenSessions[norm]) {
+        changed = true;
+        continue;
+      }
+      seenSessions[norm] = true;
+      cleanRows.push(data[i]);
     }
     if (changed) {
-      woSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+      woSheet.clearContents();
+      woSheet.getRange(1, 1, cleanRows.length, cleanRows[0].length).setValues(cleanRows);
     }
   }
 
-  // 2. sets シートの session_id を一括置換
+  // 3. sets シートの session_id を一括置換
   const setSheet = ss.getSheetByName('sets');
   if (setSheet) {
     const data = setSheet.getDataRange().getValues();
@@ -184,8 +236,167 @@ function migrateExistingSessionIds() {
     }
   }
 
-  Logger.log('Migration completed: ' + updatedWorkouts + ' workouts, ' + updatedSets + ' sets updated.');
-  return { updatedWorkouts: updatedWorkouts, updatedSets: updatedSets };
+  // 4. cardio_logs シートの重複排除
+  const clSheet = ss.getSheetByName('cardio_logs');
+  if (clSheet) {
+    const data = clSheet.getDataRange().getValues();
+    const seenIds = {};
+    const cleanRows = [data[0]];
+    for (let i = 1; i < data.length; i++) {
+      const cid = String(data[i][0] || '').trim();
+      if (!cid) continue;
+      if (seenIds[cid]) {
+        dedupedCardio++;
+        continue;
+      }
+      seenIds[cid] = true;
+      cleanRows.push(data[i]);
+    }
+    if (dedupedCardio > 0) {
+      clSheet.clearContents();
+      clSheet.getRange(1, 1, cleanRows.length, cleanRows[0].length).setValues(cleanRows);
+    }
+  }
+
+  // 5. menus シートの補完（scheduleで参照されているカスタムメニューと初期メニューの種目復元）
+  const menuSheet = ss.getSheetByName('menus');
+  if (menuSheet) {
+    if (menuSheet.getLastColumn() < 5) {
+      menuSheet.getRange(1, 5).setValue('exercises_json');
+    }
+    const reconstructedMenus = [
+      {
+        id: 'menu-chest-arms',
+        name: '胸・腕 (Push)',
+        targetParts: '胸・腕',
+        sortOrder: 1,
+        exercises: [
+          { exerciseId: 'ex-bench-press', targetSets: 3, targetReps: 10, targetWeight: 100 },
+          { exerciseId: 'ex-cable-pushdown', targetSets: 3, targetReps: 10, targetWeight: 23.75 },
+          { exerciseId: 'ex-incline-bench-press', targetSets: 3, targetReps: 10, targetWeight: 24 }
+        ]
+      },
+      {
+        id: 'menu-1791865411429',
+        name: 'Pull A（背中・二頭）',
+        targetParts: '背中・二頭',
+        sortOrder: 2,
+        exercises: [
+          { exerciseId: 'ex-chinup', targetSets: 3, targetReps: 8, targetWeight: 0 },
+          { exerciseId: 'ex-dips', targetSets: 3, targetReps: 10, targetWeight: 0 },
+          { exerciseId: 'ex-bent-over-row', targetSets: 3, targetReps: 10, targetWeight: 50 }
+        ]
+      },
+      {
+        id: 'menu-1791866449124',
+        name: 'Legs & Abs A（脚・大腿四頭筋中心 ＋ 腹筋）',
+        targetParts: '脚・腹筋',
+        sortOrder: 3,
+        exercises: [
+          { exerciseId: 'ex-squat', targetSets: 3, targetReps: 10, targetWeight: 100 },
+          { exerciseId: 'ex-leg-extension', targetSets: 3, targetReps: 8, targetWeight: 75 },
+          { exerciseId: 'ex-hanging-leg-raise', targetSets: 2, targetReps: 10, targetWeight: 0 }
+        ]
+      },
+      {
+        id: 'menu-1792013452275',
+        name: 'Push B（肩中部・上部胸・三頭）',
+        targetParts: '肩・胸・三頭',
+        sortOrder: 4,
+        exercises: [
+          { exerciseId: 'ex-custom-1792013511026', targetSets: 3, targetReps: 10, targetWeight: 24 },
+          { exerciseId: 'ex-custom-1792013533591', targetSets: 3, targetReps: 10, targetWeight: 14 },
+          { exerciseId: 'ex-custom-1792013575919', targetSets: 3, targetReps: 10, targetWeight: 18 }
+        ]
+      },
+      {
+        id: 'menu-1792100129673',
+        name: 'Pull B（背中・後部三角筋・二頭）',
+        targetParts: '背中・肩リア・二頭',
+        sortOrder: 5,
+        exercises: [
+          { exerciseId: 'ex-lat-pulldown', targetSets: 3, targetReps: 8, targetWeight: 89 },
+          { exerciseId: 'ex-face-pull', targetSets: 3, targetReps: 16, targetWeight: 21.25 },
+          { exerciseId: 'ex-seated-row', targetSets: 3, targetReps: 10, targetWeight: 89 }
+        ]
+      },
+      {
+        id: 'menu-1792185639585',
+        name: 'Legs & Abs B（下半身・ハムストリング中心）',
+        targetParts: '脚・カーフ',
+        sortOrder: 6,
+        exercises: [
+          { exerciseId: 'ex-deadlift', targetSets: 3, targetReps: 10, targetWeight: 100 },
+          { exerciseId: 'ex-leg-curl', targetSets: 3, targetReps: 10, targetWeight: 61 },
+          { exerciseId: 'ex-calf-press', targetSets: 3, targetReps: 20, targetWeight: 200 }
+        ]
+      }
+    ];
+
+    const mData = menuSheet.getDataRange().getValues();
+    const existingMenuMap = {};
+    for (let i = 1; i < mData.length; i++) {
+      const mid = String(mData[i][0] || '').trim();
+      if (!mid) continue;
+      let exArr = [];
+      try {
+        if (mData[i][4]) exArr = JSON.parse(String(mData[i][4]));
+      } catch (_) {}
+      existingMenuMap[mid] = {
+        id: mid,
+        name: String(mData[i][1] || ''),
+        targetParts: String(mData[i][2] || ''),
+        sortOrder: Number(mData[i][3]) || i,
+        exercises: exArr
+      };
+    }
+
+    reconstructedMenus.forEach(function(rm) {
+      const existing = existingMenuMap[rm.id];
+      if (!existing || !existing.exercises || existing.exercises.length === 0) {
+        existingMenuMap[rm.id] = rm;
+        updatedMenus++;
+      }
+    });
+
+    // 種目が空のまま残っている旧初期メニュー（menu-back, menu-legs-lower）を整理
+    ['menu-back', 'menu-legs-lower'].forEach(function(oldId) {
+      if (existingMenuMap[oldId] && (!existingMenuMap[oldId].exercises || existingMenuMap[oldId].exercises.length === 0)) {
+        delete existingMenuMap[oldId];
+        updatedMenus++;
+      }
+    });
+
+    if (updatedMenus > 0) {
+      const finalMenus = Object.keys(existingMenuMap)
+        .map(function(k) { return existingMenuMap[k]; })
+        .sort(function(a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0); });
+      const rows = finalMenus.map(function(m, idx) {
+        return [
+          m.id,
+          m.name,
+          m.targetParts || '',
+          idx + 1,
+          JSON.stringify(m.exercises || [])
+        ];
+      });
+      const lastRow = menuSheet.getLastRow();
+      if (lastRow > 1) {
+        menuSheet.getRange(2, 1, lastRow - 1, 5).clearContent();
+      }
+      if (rows.length > 0) {
+        menuSheet.getRange(2, 1, rows.length, 5).setValues(rows);
+      }
+    }
+  }
+
+  return {
+    updatedWorkouts: updatedWorkouts,
+    updatedSets: updatedSets,
+    dedupedCardio: dedupedCardio,
+    addedExercises: addedExercises,
+    updatedMenus: updatedMenus
+  };
 }
 
 function doGet(e) {
@@ -203,16 +414,26 @@ function doGet(e) {
     const exSheet = ss.getSheetByName('exercises');
     const exData = exSheet ? exSheet.getDataRange().getValues() : [];
     const exercises = [];
+    const exerciseByNormName = {};
+
+    // 標準種目を初期辞書に登録
+    STANDARD_EXERCISES.forEach(function(std) {
+      exerciseByNormName[normalizeNameKey(std.name)] = std;
+    });
+
     for (let i = 1; i < exData.length; i++) {
       const row = exData[i];
       if (row[0]) {
-        exercises.push({
+        const exObj = {
           id: String(row[0]),
           bodyPartId: String(row[1]),
           name: String(row[2]),
           equipment: String(row[3]),
-          note: String(row[4] || '')
-        });
+          note: String(row[4] || ''),
+          isCustom: String(row[0]).indexOf('ex-custom-') === 0
+        };
+        exercises.push(exObj);
+        exerciseByNormName[normalizeNameKey(exObj.name)] = exObj;
       }
     }
 
@@ -287,25 +508,17 @@ function doGet(e) {
       });
     }
 
-    const pastSessions = [];
-    const processedSessionIds = {};
-
-    for (let i = 1; i < woData.length; i++) {
-      const row = woData[i];
-      const sId = normalizeSessionId(row[0]);
-      if (!sId || processedSessionIds[sId]) continue;
-      processedSessionIds[sId] = true;
-
-      const rawSets = setsBySession[sId] || [];
+    function buildExercisesForSession(sId, rawSets) {
       const exerciseMap = {};
       const exList = [];
-      rawSets.forEach((s, idx) => {
+      rawSets.forEach(function(s, idx) {
         if (!exerciseMap[s.exerciseName]) {
+          const matchedMaster = exerciseByNormName[normalizeNameKey(s.exerciseName)];
           const exObj = {
             id: 'we-' + sId + '-' + (exList.length + 1),
-            exerciseId: 'ex-custom-' + s.exerciseName,
+            exerciseId: matchedMaster ? matchedMaster.id : ('ex-custom-' + s.exerciseName),
             exerciseName: s.exerciseName,
-            bodyPartId: 'other',
+            bodyPartId: matchedMaster ? matchedMaster.bodyPartId : 'other',
             orderIndex: exList.length + 1,
             sets: []
           };
@@ -321,7 +534,20 @@ function doGet(e) {
           completedAt: s.completedAt
         });
       });
+      return exList;
+    }
 
+    const pastSessions = [];
+    const processedSessionIds = {};
+
+    for (let i = 1; i < woData.length; i++) {
+      const row = woData[i];
+      const sId = normalizeSessionId(row[0]);
+      if (!sId || processedSessionIds[sId]) continue;
+      processedSessionIds[sId] = true;
+
+      const rawSets = setsBySession[sId] || [];
+      const exList = buildExercisesForSession(sId, rawSets);
       const startedAt = toIsoDateSafe(row[1], sId);
       const endedAt = row[2] ? toIsoDateSafe(row[2], sId) : undefined;
 
@@ -341,31 +567,7 @@ function doGet(e) {
       if (!processedSessionIds[sId]) {
         processedSessionIds[sId] = true;
         const rawSets = setsBySession[sId];
-        const exerciseMap = {};
-        const exList = [];
-        rawSets.forEach((s, idx) => {
-          if (!exerciseMap[s.exerciseName]) {
-            const exObj = {
-              id: 'we-' + sId + '-' + (exList.length + 1),
-              exerciseId: 'ex-custom-' + s.exerciseName,
-              exerciseName: s.exerciseName,
-              bodyPartId: 'other',
-              orderIndex: exList.length + 1,
-              sets: []
-            };
-            exerciseMap[s.exerciseName] = exObj;
-            exList.push(exObj);
-          }
-          exerciseMap[s.exerciseName].sets.push({
-            id: 's-' + sId + '-' + (idx + 1),
-            setNumber: s.setNumber,
-            weight: s.weight,
-            reps: s.reps,
-            isCompleted: s.isCompleted,
-            completedAt: s.completedAt
-          });
-        });
-
+        const exList = buildExercisesForSession(sId, rawSets);
         const startedAt = toIsoDateSafe('', sId);
 
         pastSessions.push({
@@ -379,26 +581,46 @@ function doGet(e) {
       }
     }
 
-    // 5. cardio_logs (有酸素運動ログ)
+    // 新しい日時順にソート
+    pastSessions.sort(function(a, b) {
+      return new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime();
+    });
+
+    // 5. cardio_logs (有酸素運動ログ) - 重複IDを排除
     const clSheet = ss.getSheetByName('cardio_logs');
     const clData = clSheet ? clSheet.getDataRange().getValues() : [];
     const cardioLogs = [];
+    const processedCardioIds = {};
     for (let i = 1; i < clData.length; i++) {
       const row = clData[i];
       const cId = String(row[0] || '').trim();
-      if (!cId) continue;
+      if (!cId || processedCardioIds[cId]) continue;
+      processedCardioIds[cId] = true;
+      const cName = String(row[1] || '有酸素運動').trim();
+      let cTypeId = 'cardio-custom';
+      if (cName.indexOf('ランニング') >= 0) cTypeId = 'cardio-run';
+      else if (cName.indexOf('サイクリング') >= 0 || cName.indexOf('バイク') >= 0) cTypeId = 'cardio-cycle';
+      else if (cName.indexOf('ウォーキング') >= 0) cTypeId = 'cardio-walk';
+
       const endedAt = toIsoDateSafe(row[5]);
+      const durationMin = Number(row[3]) || 0;
+      const startedAtIso = new Date(new Date(endedAt).getTime() - durationMin * 60000).toISOString();
       cardioLogs.push({
         id: cId,
-        cardioTypeId: 'cardio-custom',
-        cardioTypeName: String(row[1] || '有酸素運動'),
+        cardioTypeId: cTypeId,
+        cardioTypeName: cName,
         distanceKm: Number(row[2]) || 0,
-        durationMinutes: Number(row[3]) || 0,
+        durationMinutes: durationMin,
         calories: Number(row[4]) || 0,
+        startedAt: startedAtIso,
         endedAt: endedAt,
         note: String(row[6] || '')
       });
     }
+
+    cardioLogs.sort(function(a, b) {
+      return new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime();
+    });
 
     const result = {
       status: 'success',
@@ -519,17 +741,27 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 新規筋トレ種目の追加
+    // 新規筋トレ種目の追加（重複登録防止）
     if (data.action === 'ADD_EXERCISE') {
       const ex = data.exercise;
       const exSheet = ss.getSheetByName('exercises') || ss.insertSheet('exercises');
-      exSheet.appendRow([
-        ex.id,
-        ex.bodyPartId,
-        ex.name,
-        ex.equipment || 'OTHER',
-        ex.note || ''
-      ]);
+      const exData = exSheet.getDataRange().getValues();
+      let exists = false;
+      for (let i = 1; i < exData.length; i++) {
+        if (String(exData[i][0]) === ex.id || normalizeNameKey(exData[i][2]) === normalizeNameKey(ex.name)) {
+          exists = true;
+          break;
+        }
+      }
+      if (!exists) {
+        exSheet.appendRow([
+          ex.id,
+          ex.bodyPartId,
+          ex.name,
+          ex.equipment || 'OTHER',
+          ex.note || ''
+        ]);
+      }
 
       return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
         .setMimeType(ContentService.MimeType.JSON);

@@ -76,6 +76,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [hapticsEnabled, setHapticsEnabled] = useState(settings.hapticsEnabled ?? true);
   const [isSaved, setIsSaved] = useState(false);
 
+  React.useEffect(() => {
+    if (settings.gasWebAppUrl && settings.gasWebAppUrl !== gasUrl) {
+      setGasUrl(settings.gasWebAppUrl);
+    }
+  }, [settings.gasWebAppUrl]);
+
   // 筋トレ種目追加
   const [exerciseFilterPart, setExerciseFilterPart] = useState<string>('all');
   const [newExerciseName, setNewExerciseName] = useState('');
@@ -723,7 +729,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-slate-300">アプリバージョン</span>
           <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-brand-neon/15 text-brand-neon font-bold">
-            v1.5 (PWA最適化)
+            v1.6 (PWA自動同期対応)
           </span>
         </div>
         <p className="text-[10px] text-slate-400 leading-relaxed">
@@ -744,7 +750,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 await caches.delete(k);
               }
             }
-            window.location.reload();
+            window.location.replace(window.location.pathname + '?v=' + Date.now());
           }}
           className="w-full py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 active:scale-98 text-xs font-semibold text-slate-200 border border-dark-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation"
         >

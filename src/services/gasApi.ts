@@ -1,16 +1,20 @@
 import { WorkoutSession, CardioLog, Exercise, WeekdaySchedule, RoutineMenu } from '../types';
 
 export const GasApiService = {
-  // スプレッドシートからマスタ取得 (doGet)
+  // スプレッドシートからマスタ・履歴取得 (doGet)
   async fetchSpreadsheetData(gasUrl: string) {
     if (!gasUrl) {
       throw new Error('GAS Web App URLが設定されていません');
     }
 
     try {
-      const response = await fetch(gasUrl, {
+      const separator = gasUrl.includes('?') ? '&' : '?';
+      const noCacheUrl = `${gasUrl.trim()}${separator}_t=${Date.now()}`;
+      const response = await fetch(noCacheUrl, {
         method: 'GET',
         mode: 'cors',
+        cache: 'no-store',
+        redirect: 'follow',
       });
 
       if (!response.ok) {
@@ -25,7 +29,7 @@ export const GasApiService = {
         throw err;
       }
       throw new Error(
-        'GASへの接続に失敗しました (Load failed)。Apps Scriptの「デプロイを管理」にて「アクセスできるユーザー: 全員」に設定されているかご確認ください。'
+        'GASへの接続に失敗しました (Load failed)。通信環境をご確認のうえ再度お試しください。'
       );
     }
   },

@@ -14,9 +14,21 @@ if (typeof window !== 'undefined') {
     document.documentElement.classList.add('is-standalone');
   }
 
-  // PWAのServiceWorker自動更新（更新があれば即座にリロード）
+  // PWAのServiceWorker自動更新（更新があれば即座にリロード、フォアグラウンド復帰時にも更新チェック）
   registerSW({
     immediate: true,
+    onRegisteredSW(_swUrl, r) {
+      if (r) {
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            r.update();
+          }
+        });
+        window.addEventListener('focus', () => {
+          r.update();
+        });
+      }
+    },
     onNeedRefresh() {
       window.location.reload();
     },

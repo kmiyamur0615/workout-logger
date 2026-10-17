@@ -34,7 +34,7 @@ const KEYS = {
   DATA_VERSION: 'wl_data_version',
 };
 
-const CURRENT_DATA_VERSION = '20261015_v3';
+const CURRENT_DATA_VERSION = '20261018_v4';
 
 export function normalizeSessionId(id?: string): string {
   if (!id) return '';
@@ -83,6 +83,17 @@ export const StorageService = {
         }
         if (localStorage.getItem(KEYS.EXERCISES) === null) {
           setStored(KEYS.EXERCISES, INITIAL_EXERCISES);
+        } else {
+          // 過去の同期処理で標準種目が欠落していた場合に復元
+          const existingEx = getStored<Exercise[]>(KEYS.EXERCISES, INITIAL_EXERCISES);
+          const existingIds = new Set(existingEx.map(e => e.id));
+          const existingNames = new Set(existingEx.map(e => e.name));
+          const missingInitial = INITIAL_EXERCISES.filter(
+            e => !existingIds.has(e.id) && !existingNames.has(e.name)
+          );
+          if (missingInitial.length > 0) {
+            setStored(KEYS.EXERCISES, [...existingEx, ...missingInitial]);
+          }
         }
         if (localStorage.getItem(KEYS.ROUTINE_MENUS) === null) {
           setStored(KEYS.ROUTINE_MENUS, INITIAL_ROUTINE_MENUS);
@@ -106,8 +117,54 @@ export const StorageService = {
     setStored(KEYS.BODY_PARTS, data);
   },
 
+  // 全ワークアウト履歴から部位別の最終トレーニング日時を再計算して保存
+  recalculateBodyPartRecovery(sessionsInput?: WorkoutSession[]): BodyPart[] {
+    const sessions = sessionsInput || this.getPastSessions();
+    const exercises = this.getExercises();
+    const exById = new Map<string, Exercise>();
+    const exByName = new Map<string, Exercise>();
+    [...INITIAL_EXERCISES, ...exercises].forEach(ex => {
+      exById.set(ex.id, ex);
+      exByName.set(ex.name.trim(), ex);
+    });
+
+    const latestByPart = new Map<string, string>();
+    sessions.forEach(session => {
+      const sessionDate = session.endedAt || session.startedAt;
+      if (!sessionDate || !session.exercises) return;
+      const sessionTime = new Date(sessionDate).getTime();
+      if (isNaN(sessionTime)) return;
+
+      session.exercises.forEach(ex => {
+        if (!ex.sets || ex.sets.length === 0) return;
+        let partId = ex.bodyPartId;
+        if (!partId || partId === 'other') {
+          const matched = exById.get(ex.exerciseId) || exByName.get((ex.exerciseName || '').trim());
+          if (matched) partId = matched.bodyPartId;
+        }
+        if (!partId || partId === 'other') return;
+
+        const prevIso = latestByPart.get(partId);
+        if (!prevIso || sessionTime > new Date(prevIso).getTime()) {
+          latestByPart.set(partId, sessionDate);
+        }
+      });
+    });
+
+    const updatedParts = this.getBodyParts().map(part => {
+      const latestIso = latestByPart.get(part.id);
+      if (latestIso) {
+        return { ...part, lastTrainedAt: latestIso };
+      }
+      return part;
+    });
+    this.saveBodyParts(updatedParts);
+    return updatedParts;
+  },
+
   // 種目
   getExercises(): Exercise[] {
+    this.initMigration();
     return getStored<Exercise[]>(KEYS.EXERCISES, INITIAL_EXERCISES);
   },
   saveExercises(data: Exercise[]): void {
@@ -162,8 +219,12 @@ export const StorageService = {
       s.cardioShortcuts = INITIAL_SETTINGS.cardioShortcuts;
       changed = true;
     }
-    // gasWebAppUrlが空の場合の初期補完
-    if (!s.gasWebAppUrl && INITIAL_SETTINGS.gasWebAppUrl) {
+    // gasWebAppUrlが空、または旧デプロイURL（AKfycbxi...等）が残っている場合は最新デプロイURLに自動更新
+    if (
+      INITIAL_SETTINGS.gasWebAppUrl &&
+      (!s.gasWebAppUrl ||
+        !s.gasWebAppUrl.includes('AKfycbzp5ZJCHTRw3XvdSulCb7RgbXO3bdMm3jMbSMfO3n4BjlYNOBRU1mlyds2eRbD_Z4_5'))
+    ) {
       s.gasWebAppUrl = INITIAL_SETTINGS.gasWebAppUrl;
       changed = true;
     }
@@ -327,9 +388,14 @@ export const StorageService = {
   getPreviousLogsForExercise(exerciseId: string): PreviousExerciseLog | null {
     const todayKey = this.getDateKey();
     const sessions = this.getPastSessions();
+    const targetEx = this.getExercises().find(e => e.id === exerciseId) || INITIAL_EXERCISES.find(e => e.id === exerciseId);
+    const targetName = targetEx?.name?.trim();
+
     for (const session of sessions) {
       if (this.getDateKey(session.startedAt) === todayKey) continue;
-      const matchEx = session.exercises.find(e => e.exerciseId === exerciseId);
+      const matchEx = session.exercises.find(
+        e => e.exerciseId === exerciseId || (targetName && e.exerciseName?.trim() === targetName)
+      );
       if (matchEx && matchEx.sets.length > 0) {
         const validSets = matchEx.sets.filter(s => s.isCompleted || s.reps > 0);
         if (validSets.length > 0) {
