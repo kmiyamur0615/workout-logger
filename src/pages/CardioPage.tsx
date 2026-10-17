@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Activity, Flame, Plus, Check, Calendar, Smartphone } from 'lucide-react';
+import { Activity, Flame, Plus, Check, Calendar, Smartphone, RefreshCw } from 'lucide-react';
 import { CardioType, CardioLog, UserProfile, AppSettings } from '../types';
 import { calculateCardioCalories } from '../services/calorieCalculator';
 import { HealthSyncService } from '../services/healthSync';
+import { GasApiService } from '../services/gasApi';
+import { StorageService } from '../services/storage';
 
 interface CardioPageProps {
   cardioTypes: CardioType[];
@@ -32,6 +34,7 @@ export const CardioPage: React.FC<CardioPageProps> = ({
     return now.toISOString().slice(0, 16);
   });
   const [note, setNote] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
   const [isSavedSuccess, setIsSavedSuccess] = useState(false);
   const [syncToHealth, setSyncToHealth] = useState(true);
 
@@ -75,12 +78,14 @@ export const CardioPage: React.FC<CardioPageProps> = ({
     heightCm: userProfile.heightCm || 170,
   });
 
-  const handleSave = (syncToHealth: boolean = true) => {
-    if (!currentType) return;
+  const handleSave = async (shouldSyncHealth: boolean = true) => {
+    if (!currentType || isSaving || isSavedSuccess) return;
     if (durationNum <= 0) {
       alert('運動時間（分）を入力してください');
       return;
     }
+
+    setIsSaving(true);
 
     // 触感フィードバック (設定がONの場合のみ)
     if (settings?.hapticsEnabled !== false && typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -108,13 +113,28 @@ export const CardioPage: React.FC<CardioPageProps> = ({
       note: note.trim() || undefined,
     };
 
-    onSaveCardioLog(newLog);
+    // まずローカルストレージに即時保存（ショートカット遷移等で中断されても消えないようにする）
+    StorageService.addCardioLog(newLog);
+
+    try {
+      // ショートカット遷移でSafariがバックグラウンド化する前にGAS送信を完了させる
+      const latestSettings = StorageService.getSettings();
+      if (latestSettings.gasWebAppUrl) {
+        await GasApiService.syncCardioLog(latestSettings.gasWebAppUrl, newLog);
+      }
+    } catch (e) {
+      console.error('有酸素ログのGAS送信エラー:', e);
+    } finally {
+      setIsSaving(false);
+    }
+
     setIsSavedSuccess(true);
 
-    if (syncToHealth) {
+    if (shouldSyncHealth) {
       HealthSyncService.triggerCardioShortcut(newLog, targetShortcutName);
     }
 
+    onSaveCardioLog(newLog);
     setTimeout(() => setIsSavedSuccess(false), 2000);
   };
 
@@ -310,14 +330,19 @@ export const CardioPage: React.FC<CardioPageProps> = ({
           <button
             type="button"
             onClick={() => handleSave(syncToHealth)}
-            disabled={isSavedSuccess}
+            disabled={isSaving || isSavedSuccess}
             className={`w-full py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-xl active:scale-98 ${
               isSavedSuccess
                 ? 'bg-green-500 text-dark-950 shadow-green-500/25'
-                : 'bg-amber-500 hover:bg-amber-400 text-dark-950 shadow-amber-500/25'
+                : 'bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-dark-950 shadow-amber-500/25'
             }`}
           >
-            {isSavedSuccess ? (
+            {isSaving ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>スプレッドシートへ保存中...</span>
+              </>
+            ) : isSavedSuccess ? (
               <>
                 <Check className="w-4 h-4 stroke-[3]" />
                 <span>保存しました！</span>

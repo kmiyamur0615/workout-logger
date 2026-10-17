@@ -201,26 +201,39 @@ export function App() {
         StorageService.saveCardioLogs(mergedCardio);
         setCardioLogs(mergedCardio);
 
-        // 6. ローカル未同期データのバックグラウンド送信
+        // 6. ローカル未同期データの並列送信（ローカル保存完了後に実行し、alertで通信がブロックされる前に完了させる）
+        const uploadPromises: Promise<any>[] = [];
         if (shouldUploadMenus) {
-          GasApiService.syncMenus(gasUrl, mergedMenus).catch(e =>
-            console.error('メニューのGAS同期失敗:', e)
+          uploadPromises.push(
+            GasApiService.syncMenus(gasUrl, mergedMenus).catch(e =>
+              console.error('メニューのGAS同期失敗:', e)
+            )
           );
         }
         if (shouldUploadSchedule) {
-          GasApiService.syncSchedule(gasUrl, localSchedule).catch(e =>
-            console.error('スケジュールのGAS同期失敗:', e)
+          uploadPromises.push(
+            GasApiService.syncSchedule(gasUrl, localSchedule).catch(e =>
+              console.error('スケジュールのGAS同期失敗:', e)
+            )
           );
         }
         for (const localSession of localOnlySessions) {
-          GasApiService.syncWorkoutSession(gasUrl, localSession).catch(e =>
-            console.error('ローカルセッションのGAS同期失敗:', e)
+          uploadPromises.push(
+            GasApiService.syncWorkoutSession(gasUrl, localSession).catch(e =>
+              console.error('ローカルセッションのGAS同期失敗:', e)
+            )
           );
         }
         for (const localC of localOnlyCardio) {
-          GasApiService.syncCardioLog(gasUrl, localC).catch(e =>
-            console.error('ローカル有酸素ログのGAS同期失敗:', e)
+          uploadPromises.push(
+            GasApiService.syncCardioLog(gasUrl, localC).catch(e =>
+              console.error('ローカル有酸素ログのGAS同期失敗:', e)
+            )
           );
+        }
+
+        if (uploadPromises.length > 0) {
+          await Promise.allSettled(uploadPromises);
         }
 
         if (!silent) {
@@ -406,8 +419,16 @@ export function App() {
 
   const handleUpdatePastSession = (session: WorkoutSession) => {
     StorageService.updatePastSession(session);
-    setPastSessions(StorageService.getPastSessions());
+    const updatedSessions = StorageService.getPastSessions();
+    setPastSessions(updatedSessions);
+    setBodyParts(StorageService.recalculateBodyPartRecovery(updatedSessions));
     setActiveSession(StorageService.getOrCreateTodaySession());
+    const gasUrl = StorageService.getSettings().gasWebAppUrl;
+    if (gasUrl) {
+      GasApiService.syncWorkoutSession(gasUrl, session).catch(err =>
+        console.error('GASへのセッション編集同期に失敗:', err)
+      );
+    }
   };
 
   // 有酸素運動操作
@@ -420,6 +441,12 @@ export function App() {
   const handleUpdateCardioLog = (log: CardioLog) => {
     StorageService.updateCardioLog(log);
     setCardioLogs(StorageService.getCardioLogs());
+    const gasUrl = StorageService.getSettings().gasWebAppUrl;
+    if (gasUrl) {
+      GasApiService.syncCardioLog(gasUrl, log).catch(err =>
+        console.error('GASへの有酸素編集同期に失敗:', err)
+      );
+    }
   };
 
   const handleDeleteCardioLog = (logId: string) => {

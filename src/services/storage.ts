@@ -434,10 +434,16 @@ export const StorageService = {
     return getStored<CardioLog[]>(KEYS.CARDIO_LOGS, INITIAL_CARDIO_LOGS);
   },
   saveCardioLogs(logs: CardioLog[]): void {
-    setStored(KEYS.CARDIO_LOGS, logs);
+    const seen = new Set<string>();
+    const unique = logs.filter(l => {
+      if (!l.id || seen.has(l.id)) return false;
+      seen.add(l.id);
+      return true;
+    });
+    setStored(KEYS.CARDIO_LOGS, unique);
   },
   addCardioLog(log: CardioLog): void {
-    const logs = this.getCardioLogs();
+    const logs = this.getCardioLogs().filter(l => l.id !== log.id);
     this.saveCardioLogs([log, ...logs]);
   },
   updateCardioLog(log: CardioLog): void {
