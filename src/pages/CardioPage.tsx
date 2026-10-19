@@ -224,18 +224,73 @@ export const CardioPage: React.FC<CardioPageProps> = ({
           <div className="grid grid-cols-3 gap-2">
             {cardioTypes.map((type) => {
               const isSelected = selectedTypeId === type.id;
+              const isRun = type.id === 'cardio-run' || type.name.includes('ランニング') || type.name.includes('ラン');
+              const isCycle = type.id === 'cardio-cycle' || type.name.includes('サイクリング') || type.name.includes('バイク') || type.name.includes('自転車');
+              const isWalk = type.id === 'cardio-walk' || type.name.includes('ウォーキング') || type.name.includes('歩');
+
+              const cardStyle = isSelected
+                ? isRun
+                  ? 'border-2 border-orange-400 bg-orange-500/20 text-white shadow-lg shadow-orange-500/20'
+                  : isCycle
+                  ? 'border-2 border-cyan-400 bg-cyan-500/20 text-white shadow-lg shadow-cyan-500/20'
+                  : isWalk
+                  ? 'border-2 border-emerald-400 bg-emerald-500/20 text-white shadow-lg shadow-emerald-500/20'
+                  : 'border-2 border-amber-400 bg-amber-500/20 text-white shadow-lg shadow-amber-500/20'
+                : 'border border-dark-700 bg-dark-800 text-slate-300 hover:bg-dark-750';
+
+              const badgeStyle = isSelected
+                ? isRun
+                  ? 'bg-orange-400 text-dark-950 shadow-sm'
+                  : isCycle
+                  ? 'bg-cyan-400 text-dark-950 shadow-sm'
+                  : isWalk
+                  ? 'bg-emerald-400 text-dark-950 shadow-sm'
+                  : 'bg-amber-400 text-dark-950 shadow-sm'
+                : isRun
+                ? 'bg-orange-500/20 text-orange-400'
+                : isCycle
+                ? 'bg-cyan-500/20 text-cyan-400'
+                : isWalk
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : 'bg-amber-500/20 text-amber-400';
+
               return (
                 <button
                   key={type.id}
                   type="button"
                   onClick={() => setSelectedTypeId(type.id)}
-                  className={`py-3 px-2 rounded-2xl text-xs font-bold transition-all text-center truncate active:scale-95 ${
-                    isSelected
-                      ? 'bg-amber-500 text-dark-950 shadow-lg shadow-amber-500/25 ring-2 ring-amber-400'
-                      : 'bg-dark-800 text-slate-300 hover:bg-dark-750 border border-dark-750'
-                  }`}
+                  className={`flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl text-xs font-bold transition-all text-center active:scale-95 ${cardStyle}`}
                 >
-                  {type.name}
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${badgeStyle}`}>
+                    {isRun ? (
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="15" cy="4" r="2" />
+                        <path d="M10.5 9.5 7 12l2.5 3.5" />
+                        <path d="m13 9.5 3.5 2.5 2.5-1.5" />
+                        <path d="m8 18-3 2" />
+                        <path d="m14 14-2 3.5 3.5 3.5" />
+                        <path d="m10.5 9.5 3.5 4.5" />
+                      </svg>
+                    ) : isCycle ? (
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="18.5" cy="17.5" r="3.5" />
+                        <circle cx="5.5" cy="17.5" r="3.5" />
+                        <circle cx="15" cy="5" r="1" />
+                        <path d="M12 17.5V14l-3-3 4-3 2 3h2" />
+                      </svg>
+                    ) : isWalk ? (
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="13" cy="4.5" r="2" />
+                        <path d="m11.5 9.5-2.5 3 2 2.5" />
+                        <path d="m11.5 9.5 3 3 2.5 1" />
+                        <path d="m10 15-2 5" />
+                        <path d="m13 14.5 2.5 5.5" />
+                      </svg>
+                    ) : (
+                      <Activity className="w-5 h-5" />
+                    )}
+                  </div>
+                  <span className="truncate w-full">{type.name}</span>
                 </button>
               );
             })}
