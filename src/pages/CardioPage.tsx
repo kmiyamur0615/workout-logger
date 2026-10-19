@@ -25,7 +25,7 @@ export const CardioPage: React.FC<CardioPageProps> = ({
   onSaveCardioLog,
   onAddCardioType,
 }) => {
-  const [selectedTypeId, setSelectedTypeId] = useState<string>(cardioTypes[0]?.id || '');
+  const [selectedTypeId, setSelectedTypeId] = useState<string>('');
   const [distance, setDistance] = useState<string>('');
   const [duration, setDuration] = useState<string>('');
   const [endedAt, setEndedAt] = useState<string>(() => {
@@ -58,7 +58,7 @@ export const CardioPage: React.FC<CardioPageProps> = ({
   const [newTypeName, setNewTypeName] = useState<string>('');
   const [newTypeMets, setNewTypeMets] = useState<string>('7.0');
 
-  const currentType = cardioTypes.find(t => t.id === selectedTypeId) || cardioTypes[0];
+  const currentType = cardioTypes.find(t => t.id === selectedTypeId) || null;
   const distanceNum = parseFloat(distance) || 0;
   const durationNum = parseFloat(duration) || 0;
 
@@ -69,17 +69,23 @@ export const CardioPage: React.FC<CardioPageProps> = ({
     settings || { cardioShortcutName }
   );
 
-  const calculatedCalories = calculateCardioCalories({
-    cardioTypeName: currentType?.name || '',
-    defaultMets: currentType?.defaultMets || 6.0,
-    distanceKm: distanceNum,
-    durationMinutes: durationNum,
-    weightKg: userProfile.weightKg || 65,
-    heightCm: userProfile.heightCm || 170,
-  });
+  const calculatedCalories = currentType
+    ? calculateCardioCalories({
+        cardioTypeName: currentType.name,
+        defaultMets: currentType.defaultMets || 6.0,
+        distanceKm: distanceNum,
+        durationMinutes: durationNum,
+        weightKg: userProfile.weightKg || 65,
+        heightCm: userProfile.heightCm || 170,
+      })
+    : 0;
 
   const handleSave = async (shouldSyncHealth: boolean = true) => {
-    if (!currentType || isSaving || isSavedSuccess) return;
+    if (isSaving || isSavedSuccess) return;
+    if (!currentType) {
+      alert('運動種別（ランニング・サイクリング・ウォーキング等）を選択してください');
+      return;
+    }
     if (durationNum <= 0) {
       alert('運動時間（分）を入力してください');
       return;
@@ -166,7 +172,14 @@ export const CardioPage: React.FC<CardioPageProps> = ({
         {/* 種別選択 */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-semibold text-slate-300">運動種別</label>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-slate-300">運動種別</label>
+              {!currentType && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold">
+                  選択してください
+                </span>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => setIsAddingType(!isAddingType)}
@@ -209,20 +222,23 @@ export const CardioPage: React.FC<CardioPageProps> = ({
           )}
 
           <div className="grid grid-cols-3 gap-2">
-            {cardioTypes.map((type) => (
-              <button
-                key={type.id}
-                type="button"
-                onClick={() => setSelectedTypeId(type.id)}
-                className={`py-3 px-2 rounded-2xl text-xs font-bold transition-all text-center truncate active:scale-95 ${
-                  selectedTypeId === type.id
-                    ? 'bg-amber-500 text-dark-950 shadow-lg shadow-amber-500/25 ring-2 ring-amber-400'
-                    : 'bg-dark-800 text-slate-300 hover:bg-dark-750 border border-dark-750'
-                }`}
-              >
-                {type.name}
-              </button>
-            ))}
+            {cardioTypes.map((type) => {
+              const isSelected = selectedTypeId === type.id;
+              return (
+                <button
+                  key={type.id}
+                  type="button"
+                  onClick={() => setSelectedTypeId(type.id)}
+                  className={`py-3 px-2 rounded-2xl text-xs font-bold transition-all text-center truncate active:scale-95 ${
+                    isSelected
+                      ? 'bg-amber-500 text-dark-950 shadow-lg shadow-amber-500/25 ring-2 ring-amber-400'
+                      : 'bg-dark-800 text-slate-300 hover:bg-dark-750 border border-dark-750'
+                  }`}
+                >
+                  {type.name}
+                </button>
+              );
+            })}
           </div>
         </div>
 
