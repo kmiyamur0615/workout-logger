@@ -130,13 +130,30 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
     });
   };
 
-  // 種目の削除
+  // 種目の削除（削除した種目IDを記録し、メニュー再読込や自動同期で復活しないようにする）
   const handleDeleteExercise = (exerciseId: string) => {
+    const deletedEx = session.exercises.find(e => e.id === exerciseId);
     const updatedExercises = session.exercises.filter(e => e.id !== exerciseId);
-    onUpdateSession({
+    const excludedSet = new Set(session.excludedExerciseIds || []);
+    if (deletedEx?.exerciseId) {
+      excludedSet.add(deletedEx.exerciseId);
+    }
+
+    const updatedSession: WorkoutSession = {
       ...session,
+      excludedExerciseIds: Array.from(excludedSet),
       exercises: updatedExercises,
-    });
+    };
+
+    onUpdateSession(updatedSession);
+
+    // スプレッドシート側にすでに保存されていた種目が同期で復活しないようバックグラウンドで反映
+    const settings = StorageService.getSettings();
+    if (settings.gasWebAppUrl) {
+      GasApiService.syncWorkoutSession(settings.gasWebAppUrl, updatedSession).catch(err =>
+        console.error('種目削除のGAS同期エラー:', err)
+      );
+    }
   };
 
   // 上のSetからのコピー機能（一括コピー: 重量・回数 / 重量のみ / 回数のみ）
@@ -189,8 +206,10 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
     };
 
     const updated = [...session.exercises, newEx];
+    const remainingExcluded = (session.excludedExerciseIds || []).filter(id => id !== ex.id);
     onUpdateSession({
       ...session,
+      excludedExerciseIds: remainingExcluded,
       exercises: updated,
     });
     setIsAddExerciseOpen(false);

@@ -44,13 +44,22 @@ export const HealthSyncService = {
       menuName: session.menuName || 'ワークアウト',
       startDate: startDate,
       endDate: endDate,
+      開始日: startDate,
+      開始日時: startDate,
+      start: startDate,
       durationMinutes: durationMinutes,
-      calories: caloriesNum,
-      distanceKm: 0,
-      // ショートカット側の表記揺れ・簡略指定用エイリアス（有酸素運動と完全共通化）
       duration: durationMinutes,
+      minutes: durationMinutes,
+      時間: durationMinutes,
+      分: durationMinutes,
+      calories: caloriesNum,
       calorie: caloriesNum,
+      kcal: caloriesNum,
+      カロリー: caloriesNum,
+      distanceKm: 0,
       distance: 0,
+      km: 0,
+      距離: 0,
     };
 
     const jsonString = JSON.stringify(payload);

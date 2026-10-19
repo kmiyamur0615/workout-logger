@@ -472,9 +472,7 @@ function doGet(e) {
       });
     }
 
-    // 4. workouts & sets (筋トレ履歴) - session_idを正規化して突合
-    const woSheet = ss.getSheetByName('workouts');
-    const woData = woSheet ? woSheet.getDataRange().getValues() : [];
+    // 4. sets (筋トレ履歴) - setsシート単一でセッション履歴を構築 (workoutsシート不要)
     const setSheet = ss.getSheetByName('sets');
     const setData = setSheet ? setSheet.getDataRange().getValues() : [];
 
@@ -537,48 +535,37 @@ function doGet(e) {
       return exList;
     }
 
+    function formatExercisesSummary(exList) {
+      const names = exList.map(function(e) { return e.exerciseName; }).filter(Boolean);
+      if (names.length === 0) return '筋トレ';
+      if (names.length <= 2) return names.join(' / ');
+      return names.slice(0, 2).join(' / ') + ' 他' + (names.length - 2) + '種目';
+    }
+
     const pastSessions = [];
-    const processedSessionIds = {};
-
-    for (let i = 1; i < woData.length; i++) {
-      const row = woData[i];
-      const sId = normalizeSessionId(row[0]);
-      if (!sId || processedSessionIds[sId]) continue;
-      processedSessionIds[sId] = true;
-
-      const rawSets = setsBySession[sId] || [];
+    for (const sId in setsBySession) {
+      const rawSets = setsBySession[sId];
+      if (!rawSets || rawSets.length === 0) continue;
       const exList = buildExercisesForSession(sId, rawSets);
-      const startedAt = toIsoDateSafe(row[1], sId);
-      const endedAt = row[2] ? toIsoDateSafe(row[2], sId) : undefined;
+      const timestamps = rawSets
+        .map(function(s) { return s.completedAt ? new Date(s.completedAt).getTime() : NaN; })
+        .filter(function(t) { return !isNaN(t); });
+      const startedAt = timestamps.length > 0
+        ? new Date(Math.min.apply(null, timestamps)).toISOString()
+        : toIsoDateSafe('', sId);
+      const endedAt = timestamps.length > 0
+        ? new Date(Math.max.apply(null, timestamps)).toISOString()
+        : startedAt;
 
       pastSessions.push({
         id: sId,
         startedAt: startedAt,
         endedAt: endedAt,
-        menuName: String(row[3] || '筋トレ'),
-        note: String(row[4] || ''),
+        menuName: formatExercisesSummary(exList),
+        note: '',
         isSyncedWithGAS: true,
         exercises: exList
       });
-    }
-
-    // workoutsシートに未登録だがsetsシートにあるセッションも救出
-    for (const sId in setsBySession) {
-      if (!processedSessionIds[sId]) {
-        processedSessionIds[sId] = true;
-        const rawSets = setsBySession[sId];
-        const exList = buildExercisesForSession(sId, rawSets);
-        const startedAt = toIsoDateSafe('', sId);
-
-        pastSessions.push({
-          id: sId,
-          startedAt: startedAt,
-          menuName: '筋トレ',
-          note: '',
-          isSyncedWithGAS: true,
-          exercises: exList
-        });
-      }
     }
 
     // 新しい日時順にソート
@@ -644,37 +631,13 @@ function doPost(e) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const data = JSON.parse(e.postData.contents);
 
-    // 筋トレワークアウトの保存（重複時は既存を更新・正規化session_id利用）
+    // 筋トレワークアウトの保存（setsシートのみを更新・workoutsシート不要）
     if (data.action === 'SAVE_WORKOUT') {
       const session = data.session;
       const normSessionId = normalizeSessionId(session.id);
       const sets = data.sets || [];
 
-      const woSheet = ss.getSheetByName('workouts') || ss.insertSheet('workouts');
-      const woData = woSheet.getDataRange().getValues();
-      let existingWoRow = -1;
-      for (let i = 1; i < woData.length; i++) {
-        if (normalizeSessionId(woData[i][0]) === normSessionId) {
-          existingWoRow = i + 1;
-          break;
-        }
-      }
-
-      const rowValues = [
-        normSessionId,
-        session.startedAt,
-        session.endedAt || new Date().toISOString(),
-        session.menuName || '筋トレ',
-        session.note || ''
-      ];
-
-      if (existingWoRow > 0) {
-        woSheet.getRange(existingWoRow, 1, 1, 5).setValues([rowValues]);
-      } else {
-        woSheet.appendRow(rowValues);
-      }
-
-      // setsシートの更新（高速一括処理: deleteRowループを排除）
+      // setsシートの更新（高速一括処理: 該当セッションの既存行を新しいセット一覧で置換）
       const setSheet = ss.getSheetByName('sets') || ss.insertSheet('sets');
       const setData = setSheet.getDataRange().getValues();
       const remainingSets = [];

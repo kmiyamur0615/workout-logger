@@ -309,19 +309,23 @@ export const StorageService = {
     this.saveTodaySession(session);
   },
 
+  // 実施種目リストから表示用タイトルを自動生成（メニューテンプレート名に依存しない）
+  formatExercisesSummary(exercises: { exerciseName: string }[]): string {
+    const names = exercises.map(e => e.exerciseName).filter(Boolean);
+    if (names.length === 0) return '本日の筋トレ';
+    if (names.length <= 2) return names.join(' / ');
+    return `${names.slice(0, 2).join(' / ')} 他${names.length - 2}種目`;
+  },
+
   // 今日のワークアウトシートを取得（なければ空のシートを生成）
   getOrCreateTodaySession(): WorkoutSession {
     const todayKey = this.getDateKey();
     const targetSessionId = `session-${todayKey}`;
     const sessions = this.getPastSessions();
 
-    // 旧バージョンの実行中セッションが残っていれば引き継ぐ
-    const legacyActive = getStored<WorkoutSession | null>(KEYS.ACTIVE_SESSION, null);
-    if (legacyActive && legacyActive.exercises.length > 0) {
-      localStorage.removeItem(KEYS.ACTIVE_SESSION);
-      this.saveTodaySession(legacyActive);
-      return legacyActive;
-    }
+    // 当日の一時メタデータ（削除済み種目リスト等）を確認
+    const activeMeta = getStored<WorkoutSession | null>(KEYS.ACTIVE_SESSION, null);
+    const isSameDayMeta = activeMeta && normalizeSessionId(activeMeta.id) === targetSessionId;
 
     const existingToday = sessions.find(s => 
       this.getDateKey(s.startedAt) === todayKey || normalizeSessionId(s.id) === targetSessionId
@@ -329,7 +333,17 @@ export const StorageService = {
     if (existingToday) {
       return {
         ...existingToday,
-        id: normalizeSessionId(existingToday.id)
+        id: normalizeSessionId(existingToday.id),
+        excludedExerciseIds: isSameDayMeta
+          ? Array.from(new Set([...(existingToday.excludedExerciseIds || []), ...(activeMeta?.excludedExerciseIds || [])]))
+          : existingToday.excludedExerciseIds,
+      };
+    }
+
+    if (isSameDayMeta) {
+      return {
+        ...activeMeta,
+        id: targetSessionId,
       };
     }
 
@@ -337,39 +351,42 @@ export const StorageService = {
       id: targetSessionId,
       startedAt: new Date().toISOString(),
       menuName: '本日の筋トレ',
+      excludedExerciseIds: [],
       exercises: [],
     };
   },
 
-  // 今日のワークアウトを自動保存（種目が1つ以上あれば履歴に自動保存、0なら履歴から除去）
+  // 今日のワークアウトを自動保存（種目が1つ以上あれば履歴に自動保存、0なら履歴から除去しつつ削除済み種目メタデータは保持）
   saveTodaySession(session: WorkoutSession): void {
     const targetDateKey = this.getDateKey(session.startedAt);
     const normSessionId = normalizeSessionId(session.id);
+    const nowIso = new Date().toISOString();
     const sessions = this.getPastSessions();
     const otherSessions = sessions.filter(
       s => normalizeSessionId(s.id) !== normSessionId && this.getDateKey(s.startedAt) !== targetDateKey
     );
 
+    const updatedSession: WorkoutSession = {
+      ...session,
+      id: normSessionId,
+      menuName: session.exercises.length > 0
+        ? this.formatExercisesSummary(session.exercises)
+        : (session.menuName || '本日の筋トレ'),
+      endedAt: session.endedAt || nowIso,
+      updatedAt: nowIso,
+    };
+
+    // 削除済み種目リスト等を含む当日状態をACTIVE_SESSIONにも保存
+    setStored(KEYS.ACTIVE_SESSION, updatedSession);
+
     if (session.exercises.length > 0) {
-      const updatedSession: WorkoutSession = {
-        ...session,
-        id: normSessionId,
-        endedAt: session.endedAt || new Date().toISOString(),
-      };
       this.savePastSessions([updatedSession, ...otherSessions]);
 
-      // 部位ごとの最終トレーニング日時を更新
-      const trainedPartIds = new Set(session.exercises.map(e => e.bodyPartId));
-      const nowIso = updatedSession.endedAt || updatedSession.startedAt;
-      const parts = this.getBodyParts().map(part => {
-        if (trainedPartIds.has(part.id)) {
-          return { ...part, lastTrainedAt: nowIso };
-        }
-        return part;
-      });
-      this.saveBodyParts(parts);
+      // 部位ごとの最終トレーニング日時を再計算して更新
+      this.recalculateBodyPartRecovery([updatedSession, ...otherSessions]);
     } else {
       this.savePastSessions(otherSessions);
+      this.recalculateBodyPartRecovery(otherSessions);
     }
   },
 

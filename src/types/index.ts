@@ -55,11 +55,13 @@ export interface WorkoutSession {
   id: string;
   startedAt: string;
   endedAt?: string;
+  updatedAt?: string;
   menuId?: string;
   menuName?: string;
   note?: string;
   isSyncedWithGAS?: boolean;
   isSyncedWithHealth?: boolean;
+  excludedExerciseIds?: string[];
   exercises: WorkoutExercise[];
 }
 

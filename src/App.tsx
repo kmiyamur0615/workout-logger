@@ -124,18 +124,33 @@ export function App() {
         }
 
         // 4. 筋トレ履歴 (pastSessions) の双方向同期（session_idを正規化して突合）
-        const enrichSessionExercises = (s: WorkoutSession): WorkoutSession => ({
-          ...s,
-          id: normalizeSessionId(s.id),
-          exercises: (s.exercises || []).map(ex => {
-            const matched = exById.get(ex.exerciseId) || exByName.get((ex.exerciseName || '').trim());
-            return {
-              ...ex,
-              exerciseId: matched ? matched.id : ex.exerciseId,
-              bodyPartId: (!ex.bodyPartId || ex.bodyPartId === 'other') && matched ? matched.bodyPartId : ex.bodyPartId,
-            };
-          }),
-        });
+        const todaySessionId = `session-${StorageService.getDateKey()}`;
+        const todayActiveSession = StorageService.getOrCreateTodaySession();
+        const todayExcludedIds = new Set(todayActiveSession.excludedExerciseIds || []);
+
+        const enrichSessionExercises = (s: WorkoutSession): WorkoutSession => {
+          const normId = normalizeSessionId(s.id);
+          const mappedExercises = (s.exercises || [])
+            .map(ex => {
+              const matched = exById.get(ex.exerciseId) || exByName.get((ex.exerciseName || '').trim());
+              return {
+                ...ex,
+                exerciseId: matched ? matched.id : ex.exerciseId,
+                bodyPartId: (!ex.bodyPartId || ex.bodyPartId === 'other') && matched ? matched.bodyPartId : ex.bodyPartId,
+              };
+            })
+            // 本日ユーザーが明示的に削除した種目はリモートから絶対に復活させない
+            .filter(ex => normId !== todaySessionId || !todayExcludedIds.has(ex.exerciseId));
+
+          return {
+            ...s,
+            id: normId,
+            menuName: mappedExercises.length > 0
+              ? StorageService.formatExercisesSummary(mappedExercises)
+              : (s.menuName || '筋トレ'),
+            exercises: mappedExercises,
+          };
+        };
 
         const remoteSessions: WorkoutSession[] = (data.pastSessions || []).map(enrichSessionExercises);
         const normLocalSessions = StorageService.getPastSessions().map(enrichSessionExercises);
@@ -145,29 +160,49 @@ export function App() {
           if (s.id) remoteSessionMap.set(s.id, s);
         });
 
-        // リモートにまだ存在しないローカルセッションのみ抽出
-        const localOnlySessions = normLocalSessions.filter(
-          s => s.id && !remoteSessionMap.has(s.id) && s.exercises && s.exercises.length > 0
-        );
+        // リモートにまだ存在しない、またはローカルで更新されたセッションを抽出
+        const localOnlySessions = normLocalSessions.filter(s => {
+          if (!s.id || !s.exercises || s.exercises.length === 0) return false;
+          const rem = remoteSessionMap.get(s.id);
+          if (!rem) return true;
+          if (s.id === todaySessionId) return true;
+          return false;
+        });
 
-        // リモートとローカルをマージ（セット数・種目数の多い方を優先）
+        // リモートとローカルをマージ（本日のセッション・ローカル更新日時が新しいものを優先し、削除した種目の復活を防止）
         const mergedSessionsMap = new Map<string, WorkoutSession>();
         remoteSessions.forEach(s => {
-          if (s.id) mergedSessionsMap.set(s.id, s);
+          if (s.id && s.exercises && s.exercises.length > 0) {
+            mergedSessionsMap.set(s.id, s);
+          }
         });
         normLocalSessions.forEach(s => {
           if (!s.id) return;
           const existing = mergedSessionsMap.get(s.id);
           if (!existing) {
             mergedSessionsMap.set(s.id, s);
+          } else if (s.id === todaySessionId) {
+            // 本日のセッションは常に手元の最新編集結果（削除を含む）を優先
+            mergedSessionsMap.set(s.id, s);
           } else {
-            const existingSetCount = (existing.exercises || []).reduce((sum, ex) => sum + (ex.sets ? ex.sets.length : 0), 0);
-            const localSetCount = (s.exercises || []).reduce((sum, ex) => sum + (ex.sets ? ex.sets.length : 0), 0);
-            if (localSetCount > existingSetCount) {
+            const localTime = new Date(s.updatedAt || s.endedAt || 0).getTime();
+            const remoteTime = new Date(existing.updatedAt || existing.endedAt || 0).getTime();
+            if (s.updatedAt && localTime >= remoteTime) {
               mergedSessionsMap.set(s.id, s);
+            } else {
+              const existingSetCount = (existing.exercises || []).reduce((sum, ex) => sum + (ex.sets ? ex.sets.length : 0), 0);
+              const localSetCount = (s.exercises || []).reduce((sum, ex) => sum + (ex.sets ? ex.sets.length : 0), 0);
+              if (localSetCount > existingSetCount) {
+                mergedSessionsMap.set(s.id, s);
+              }
             }
           }
         });
+
+        // 本日のセッションで全種目が削除されている場合はリモートからも復活させない
+        if (todayActiveSession.exercises.length === 0 && todayExcludedIds.size > 0) {
+          mergedSessionsMap.delete(todaySessionId);
+        }
 
         const mergedSessions = Array.from(mergedSessionsMap.values())
           .filter(s => s.id && s.exercises && s.exercises.length > 0)
@@ -298,21 +333,29 @@ export function App() {
   // ルーティンメニューを今日のシートに読み込む / 筋トレタブへ遷移
   const handleStartSession = (menuId?: string) => {
     if (menuId) {
-      handleLoadMenuIntoToday(menuId);
+      const currentSession = StorageService.getOrCreateTodaySession();
+      const hasAlreadyStartedToday =
+        currentSession.exercises.length > 0 ||
+        (currentSession.excludedExerciseIds && currentSession.excludedExerciseIds.length > 0);
+      // まだ本日の種目が未ロードの場合のみメニューを初期展開する（削除した種目が再ロードで復活するのを防止）
+      if (!hasAlreadyStartedToday) {
+        handleLoadMenuIntoToday(menuId);
+      }
     }
     setCurrentTab('workout');
   };
 
-  // 指定したメニューの種目を本日のワークアウトシートへ追加（すでに存在する種目は重複追加しない）
+  // 指定したメニューの種目を本日のワークアウトシートへ追加（すでに存在する種目・本日削除した種目は重複追加しない）
   const handleLoadMenuIntoToday = (menuId: string) => {
     const selectedMenu = routineMenus.find(m => m.id === menuId);
     if (!selectedMenu) return;
 
     const currentSession = StorageService.getOrCreateTodaySession();
     const existingExerciseIds = new Set(currentSession.exercises.map(e => e.exerciseId));
+    const excludedIds = new Set(currentSession.excludedExerciseIds || []);
 
     const addedExercises: WorkoutExercise[] = selectedMenu.exercises
-      .filter(item => !existingExerciseIds.has(item.exerciseId))
+      .filter(item => !existingExerciseIds.has(item.exerciseId) && !excludedIds.has(item.exerciseId))
       .map((item, idx) => {
         const exMaster = exercises.find(e => e.id === item.exerciseId);
         const prevLog = StorageService.getPreviousLogsForExercise(item.exerciseId);
@@ -337,11 +380,12 @@ export function App() {
         };
       });
 
+    const allExercises = [...currentSession.exercises, ...addedExercises];
     const updatedSession: WorkoutSession = {
       ...currentSession,
       menuId: selectedMenu.id,
-      menuName: selectedMenu.name,
-      exercises: [...currentSession.exercises, ...addedExercises],
+      menuName: StorageService.formatExercisesSummary(allExercises),
+      exercises: allExercises,
     };
 
     handleUpdateSession(updatedSession);
