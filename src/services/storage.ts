@@ -6,6 +6,7 @@ import {
   AppSettings, 
   WorkoutSession, 
   PreviousExerciseLog,
+  ExerciseMaxRecord,
   CardioType,
   CardioLog,
   UserProfile
@@ -35,6 +36,13 @@ const KEYS = {
 };
 
 const CURRENT_DATA_VERSION = '20261018_v4';
+
+// 重量(kg)と回数から推定1RMを計算 (O'Conner式: weight * (1 + reps / 40), 1回時はweightそのまま)
+export function calculate1RM(weight: number, reps: number): number {
+  if (!weight || weight <= 0 || !reps || reps <= 0) return 0;
+  if (reps === 1) return Math.round(weight * 10) / 10;
+  return Math.round(weight * (1 + reps / 40) * 10) / 10;
+}
 
 export function normalizeSessionId(id?: string): string {
   if (!id) return '';
@@ -401,33 +409,83 @@ export const StorageService = {
     localStorage.removeItem(KEYS.ACTIVE_SESSION);
   },
 
-  // 前回ログ（フロート表示用：今日の記録は除外して過去の実績を返す）
-  getPreviousLogsForExercise(exerciseId: string): PreviousExerciseLog | null {
+  // 前回ログおよび過去のMax値（フロート表示用：今日の記録は除外して過去の実績・自己ベストを返す）
+  getPreviousLogsForExercise(exerciseId: string, exerciseName?: string): PreviousExerciseLog | null {
     const todayKey = this.getDateKey();
     const sessions = this.getPastSessions();
     const targetEx = this.getExercises().find(e => e.id === exerciseId) || INITIAL_EXERCISES.find(e => e.id === exerciseId);
-    const targetName = targetEx?.name?.trim();
+    const normName = (str?: string) => (str || '').trim().replace(/\s+/g, '').toLowerCase();
+    const targetNormName = normName(exerciseName || targetEx?.name);
+
+    let latestDate: string | undefined;
+    let latestSets: { setNumber: number; weight: number; reps: number }[] = [];
+    let maxWeightRecord: ExerciseMaxRecord | undefined;
+    let max1RMRecord: ExerciseMaxRecord | undefined;
 
     for (const session of sessions) {
       if (this.getDateKey(session.startedAt) === todayKey) continue;
+      const sessionDate = session.endedAt || session.startedAt;
       const matchEx = session.exercises.find(
-        e => e.exerciseId === exerciseId || (targetName && e.exerciseName?.trim() === targetName)
+        e => e.exerciseId === exerciseId || (targetNormName && normName(e.exerciseName) === targetNormName)
       );
-      if (matchEx && matchEx.sets.length > 0) {
-        const validSets = matchEx.sets.filter(s => s.isCompleted || s.reps > 0);
-        if (validSets.length > 0) {
-          return {
-            date: session.endedAt || session.startedAt,
-            sets: validSets.map(s => ({
-              setNumber: s.setNumber,
-              weight: s.weight,
-              reps: s.reps,
-            }))
+      if (!matchEx || !matchEx.sets || matchEx.sets.length === 0) continue;
+
+      const validSets = matchEx.sets.filter(s => (s.isCompleted || s.reps > 0) && (s.weight > 0 || s.reps > 0));
+      if (validSets.length === 0) continue;
+
+      // 直近（前回）のセット一覧を保持
+      if (!latestDate) {
+        latestDate = sessionDate;
+        latestSets = validSets.map(s => ({
+          setNumber: s.setNumber,
+          weight: s.weight,
+          reps: s.reps,
+        }));
+      }
+
+      // 全過去セッションから最大重量および最大推定1RMを集計
+      for (const s of validSets) {
+        if (s.weight <= 0 || s.reps <= 0) continue;
+        const rm = calculate1RM(s.weight, s.reps);
+
+        if (
+          !maxWeightRecord ||
+          s.weight > maxWeightRecord.weight ||
+          (s.weight === maxWeightRecord.weight && s.reps > maxWeightRecord.reps)
+        ) {
+          maxWeightRecord = {
+            weight: s.weight,
+            reps: s.reps,
+            estimated1RM: rm,
+            date: sessionDate,
+          };
+        }
+
+        if (
+          !max1RMRecord ||
+          rm > max1RMRecord.estimated1RM ||
+          (rm === max1RMRecord.estimated1RM && s.weight > max1RMRecord.weight)
+        ) {
+          max1RMRecord = {
+            weight: s.weight,
+            reps: s.reps,
+            estimated1RM: rm,
+            date: sessionDate,
           };
         }
       }
     }
-    return null;
+
+    if (!latestDate && !maxWeightRecord && !max1RMRecord) {
+      return null;
+    }
+
+    return {
+      date: latestDate,
+      sets: latestSets,
+      maxWeightRecord,
+      max1RMRecord,
+    };
   },
 
   // 有酸素運動の種別マスタ

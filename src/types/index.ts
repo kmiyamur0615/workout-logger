@@ -89,13 +89,22 @@ export interface WeekdaySchedule {
   menuId: string | null;
 }
 
-export interface PreviousExerciseLog {
+export interface ExerciseMaxRecord {
+  weight: number;
+  reps: number;
+  estimated1RM: number;
   date: string;
+}
+
+export interface PreviousExerciseLog {
+  date?: string;
   sets: {
     setNumber: number;
     weight: number;
     reps: number;
   }[];
+  maxWeightRecord?: ExerciseMaxRecord;
+  max1RMRecord?: ExerciseMaxRecord;
 }
 
 // 有酸素運動の種別マスタ

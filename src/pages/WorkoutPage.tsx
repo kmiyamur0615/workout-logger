@@ -182,7 +182,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
 
   // 新規種目を今日のシートに追加（前回記録があれば1セット目の重量・回数を初期値として補完）
   const handleAddExerciseToSession = (ex: Exercise) => {
-    const prevLog = StorageService.getPreviousLogsForExercise(ex.id);
+    const prevLog = StorageService.getPreviousLogsForExercise(ex.id, ex.name);
     const firstPrevSet = prevLog?.sets?.[0];
 
     const newEx: WorkoutExercise = {

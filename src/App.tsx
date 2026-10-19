@@ -358,7 +358,7 @@ export function App() {
       .filter(item => !existingExerciseIds.has(item.exerciseId) && !excludedIds.has(item.exerciseId))
       .map((item, idx) => {
         const exMaster = exercises.find(e => e.id === item.exerciseId);
-        const prevLog = StorageService.getPreviousLogsForExercise(item.exerciseId);
+        const prevLog = StorageService.getPreviousLogsForExercise(item.exerciseId, exMaster?.name);
         return {
           id: `we-${Date.now()}-${idx}`,
           exerciseId: item.exerciseId,
