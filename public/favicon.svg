@@ -1,9 +1,73 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="m6.5 6.5 11 11"/>
-  <path d="m21 21-1-1"/>
-  <path d="m3 3 1 1"/>
-  <path d="m18 22 4-4"/>
-  <path d="m2 6 4-4"/>
-  <path d="m3 10 7-7"/>
-  <path d="m14 21 7-7"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" fill="none">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="28%" r="78%">
+      <stop offset="0%" stop-color="#1E2638" />
+      <stop offset="65%" stop-color="#0D111A" />
+      <stop offset="100%" stop-color="#07090E" />
+    </radialGradient>
+    <linearGradient id="greenRing" x1="80" y1="80" x2="432" y2="432" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34D399" />
+      <stop offset="50%" stop-color="#00F59B" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="amberRing" x1="120" y1="392" x2="392" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FBBF24" />
+      <stop offset="50%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#EA580C" />
+    </linearGradient>
+    <linearGradient id="plateGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#CBD5E1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Full-bleed background for iOS squircle mask -->
+  <rect width="512" height="512" fill="url(#bgGrad)" />
+
+  <!-- Subtle ambient center glow -->
+  <circle cx="256" cy="256" r="190" fill="#00F59B" fill-opacity="0.06" />
+  <circle cx="256" cy="256" r="130" fill="#F59E0B" fill-opacity="0.06" />
+
+  <!-- Outer Track Ring -->
+  <circle cx="256" cy="256" r="186" stroke="#1E293B" stroke-width="32" stroke-opacity="0.55" />
+  <!-- Inner Track Ring -->
+  <circle cx="256" cy="256" r="138" stroke="#1E293B" stroke-width="28" stroke-opacity="0.55" />
+
+  <!-- Outer Neon Green Arc (Strength) -->
+  <circle
+    cx="256"
+    cy="256"
+    r="186"
+    stroke="url(#greenRing)"
+    stroke-width="32"
+    stroke-dasharray="855 1200"
+    stroke-linecap="round"
+    transform="rotate(-130 256 256)"
+  />
+
+  <!-- Inner Amber Arc (Cardio) -->
+  <circle
+    cx="256"
+    cy="256"
+    r="138"
+    stroke="url(#amberRing)"
+    stroke-width="28"
+    stroke-dasharray="600 1000"
+    stroke-linecap="round"
+    transform="rotate(30 256 256)"
+  />
+
+  <!-- Center Tilted Dumbbell -->
+  <g transform="rotate(-35 256 256)">
+    <!-- Center Bar -->
+    <rect x="192" y="242" width="128" height="28" rx="10" fill="#00F59B" />
+    <!-- Left Inner Plate -->
+    <rect x="164" y="206" width="30" height="100" rx="13" fill="url(#plateGrad)" />
+    <!-- Left Outer Plate -->
+    <rect x="138" y="220" width="22" height="72" rx="10" fill="#E2E8F0" />
+    <!-- Right Inner Plate -->
+    <rect x="318" y="206" width="30" height="100" rx="13" fill="url(#plateGrad)" />
+    <!-- Right Outer Plate -->
+    <rect x="352" y="220" width="22" height="72" rx="10" fill="#E2E8F0" />
+  </g>
 </svg>
