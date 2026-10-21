@@ -156,30 +156,6 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
     }
   };
 
-  // 上のSetからのコピー機能（一括コピー: 重量・回数 / 重量のみ / 回数のみ）
-  const handleCopyFromAbove = (exerciseId: string, mode: 'all' | 'weight' | 'reps') => {
-    const targetEx = session.exercises.find(e => e.id === exerciseId);
-    if (!targetEx || targetEx.sets.length < 2) return;
-
-    const lastIdx = targetEx.sets.length - 1;
-    const sourceSet = targetEx.sets[lastIdx - 1];
-    const targetSet = targetEx.sets[lastIdx];
-
-    if (!sourceSet || !targetSet) return;
-
-    const updates: Partial<WorkoutSet> = { isCompleted: true };
-    if (mode === 'all') {
-      updates.weight = sourceSet.weight;
-      updates.reps = sourceSet.reps;
-    } else if (mode === 'weight') {
-      updates.weight = sourceSet.weight;
-    } else if (mode === 'reps') {
-      updates.reps = sourceSet.reps;
-    }
-
-    handleUpdateSet(exerciseId, targetSet.id, updates);
-  };
-
   // 新規種目を今日のシートに追加（前回記録があれば1セット目の重量・回数を初期値として補完）
   const handleAddExerciseToSession = (ex: Exercise) => {
     const prevLog = StorageService.getPreviousLogsForExercise(ex.id, ex.name);
@@ -457,7 +433,6 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
               onAddSet={handleAddSet}
               onDeleteSet={handleDeleteSet}
               onDeleteExercise={handleDeleteExercise}
-              onCopyFromAbove={handleCopyFromAbove}
             />
           ))}
 
