@@ -1,4 +1,4 @@
-import { WorkoutSession, CardioLog, Exercise, WeekdaySchedule, RoutineMenu } from '../types';
+import { WorkoutSession, CardioLog, Exercise, WeekdaySchedule, RoutineMenu, UserProfile } from '../types';
 
 export const GasApiService = {
   // スプレッドシートからマスタ・履歴取得 (doGet)
@@ -182,6 +182,31 @@ export const GasApiService = {
       return resJson.status === 'success';
     } catch (err) {
       console.error('GASメニュー同期エラー:', err);
+      return false;
+    }
+  },
+
+  // 身体データ（身長・体重）の送信
+  async syncProfile(gasUrl: string, profile: UserProfile): Promise<boolean> {
+    if (!gasUrl || !profile) return false;
+
+    try {
+      const payload = {
+        action: 'SAVE_PROFILE',
+        profile
+      };
+
+      const response = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) return false;
+      const resJson = await response.json();
+      return resJson.status === 'success';
+    } catch (err) {
+      console.error('GAS身体データ同期エラー:', err);
       return false;
     }
   }

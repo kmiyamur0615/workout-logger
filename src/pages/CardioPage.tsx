@@ -297,22 +297,8 @@ export const CardioPage: React.FC<CardioPageProps> = ({
           </div>
         </div>
 
-        {/* 距離 ＆ 時間 */}
+        {/* 時間 ＆ 距離 */}
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              距離 (km)
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={distance}
-              onChange={handleDistanceChange}
-              placeholder="0.0"
-              className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-3.5 py-3 text-lg font-mono font-bold text-white focus:outline-none focus:border-amber-400 text-center"
-            />
-          </div>
-
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">
               時間 (分)
@@ -326,20 +312,36 @@ export const CardioPage: React.FC<CardioPageProps> = ({
               className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-3.5 py-3 text-lg font-mono font-bold text-white focus:outline-none focus:border-amber-400 text-center"
             />
           </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              距離 (km)
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={distance}
+              onChange={handleDistanceChange}
+              placeholder="0.0"
+              className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-3.5 py-3 text-lg font-mono font-bold text-white focus:outline-none focus:border-amber-400 text-center"
+            />
+          </div>
         </div>
 
         {/* 終了日時 */}
-        <div>
+        <div className="min-w-0">
           <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
             <Calendar className="w-3.5 h-3.5 text-slate-400" />
             <span>終了日時</span>
           </label>
-          <input
-            type="datetime-local"
-            value={endedAt}
-            onChange={(e) => setEndedAt(e.target.value)}
-            className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
-          />
+          <div className="w-full overflow-hidden bg-dark-800 border border-dark-700 rounded-2xl focus-within:border-amber-400">
+            <input
+              type="datetime-local"
+              value={endedAt}
+              onChange={(e) => setEndedAt(e.target.value)}
+              className="block w-full max-w-full min-w-0 box-border appearance-none bg-transparent border-0 px-3.5 py-2.5 text-xs text-white focus:outline-none font-mono"
+            />
+          </div>
         </div>
 
         {/* カロリー自動計算カード */}

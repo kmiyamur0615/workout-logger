@@ -236,8 +236,55 @@ export function App() {
         StorageService.saveCardioLogs(mergedCardio);
         setCardioLogs(mergedCardio);
 
+        // 5.5 身体データ (profile: 身長・体重) の双方向同期
+        const latestSettings = StorageService.getSettings();
+        const localProfile = latestSettings.profile;
+        const remoteProfile =
+          data.profile && Number(data.profile.heightCm) > 0 && Number(data.profile.weightKg) > 0
+            ? {
+                heightCm: Number(data.profile.heightCm),
+                weightKg: Number(data.profile.weightKg),
+                weightUpdatedAt: data.profile.weightUpdatedAt ? String(data.profile.weightUpdatedAt) : undefined,
+              }
+            : null;
+
+        const localIsDefault =
+          !localProfile.weightUpdatedAt &&
+          localProfile.heightCm === 172 &&
+          localProfile.weightKg === 68;
+        let shouldUploadProfile = false;
+
+        if (remoteProfile) {
+          const localTime = localProfile.weightUpdatedAt ? new Date(localProfile.weightUpdatedAt).getTime() : 0;
+          const remoteTime = remoteProfile.weightUpdatedAt ? new Date(remoteProfile.weightUpdatedAt).getTime() : 0;
+          if (localIsDefault || (remoteTime > 0 && remoteTime > localTime)) {
+            const updatedSettings: AppSettings = {
+              ...latestSettings,
+              profile: remoteProfile,
+            };
+            StorageService.saveSettings(updatedSettings);
+            setSettings(updatedSettings);
+          } else if (
+            !localIsDefault &&
+            (localTime > remoteTime ||
+              localProfile.heightCm !== remoteProfile.heightCm ||
+              localProfile.weightKg !== remoteProfile.weightKg)
+          ) {
+            shouldUploadProfile = true;
+          }
+        } else if (!localIsDefault) {
+          shouldUploadProfile = true;
+        }
+
         // 6. ローカル未同期データの並列送信（ローカル保存完了後に実行し、alertで通信がブロックされる前に完了させる）
         const uploadPromises: Promise<any>[] = [];
+        if (shouldUploadProfile) {
+          uploadPromises.push(
+            GasApiService.syncProfile(gasUrl, StorageService.getSettings().profile).catch(e =>
+              console.error('身体データのGAS同期失敗:', e)
+            )
+          );
+        }
         if (shouldUploadMenus) {
           uploadPromises.push(
             GasApiService.syncMenus(gasUrl, mergedMenus).catch(e =>
@@ -292,7 +339,15 @@ export function App() {
   useEffect(() => {
     // URLに ?weight=XX.X が付与されている場合は自動反映
     const syncedWeight = StorageService.checkUrlWeightParam();
+    const currentSettings = StorageService.getSettings();
+    setSettings(currentSettings);
+
     if (syncedWeight) {
+      if (currentSettings.gasWebAppUrl) {
+        GasApiService.syncProfile(currentSettings.gasWebAppUrl, currentSettings.profile).catch(e =>
+          console.error('体重取得後のGAS同期失敗:', e)
+        );
+      }
       alert(`Appleヘルスケアから最新体重 (${syncedWeight} kg) を取得・反映しました！`);
     }
 
@@ -305,8 +360,6 @@ export function App() {
     setCardioTypes(StorageService.getCardioTypes());
     setCardioLogs(StorageService.getCardioLogs());
     setActiveSession(StorageService.getOrCreateTodaySession());
-    const currentSettings = StorageService.getSettings();
-    setSettings(currentSettings);
 
     // 起動時に自動でスプレッドシートから最新データを同期
     if (currentSettings.gasWebAppUrl) {
@@ -584,6 +637,11 @@ export function App() {
             onSaveSettings={(s) => {
               StorageService.saveSettings(s);
               setSettings(s);
+              if (s.gasWebAppUrl && s.profile) {
+                GasApiService.syncProfile(s.gasWebAppUrl, s.profile).catch(err =>
+                  console.error('GASへの身体データ同期に失敗:', err)
+                );
+              }
             }}
             onAddExercise={handleAddExercise}
             onDeleteExercise={handleDeleteExerciseMaster}

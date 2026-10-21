@@ -118,6 +118,14 @@ function setupSpreadsheet() {
     clSheet.getRange(1, 1, 1, 7).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
   }
 
+  // 8. user_profile (身体データ)
+  let profSheet = ss.getSheetByName('user_profile');
+  if (!profSheet) {
+    profSheet = ss.insertSheet('user_profile');
+    profSheet.appendRow(['height_cm', 'weight_kg', 'updated_at']);
+    profSheet.getRange(1, 1, 1, 3).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
+  }
+
   Logger.log('スプレッドシートの初期セットアップが完了しました。');
 }
 
@@ -609,13 +617,31 @@ function doGet(e) {
       return new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime();
     });
 
+    // 6. user_profile (身体データ: 身長・体重)
+    const profSheet = ss.getSheetByName('user_profile');
+    let profile = null;
+    if (profSheet && profSheet.getLastRow() >= 2) {
+      const pRow = profSheet.getRange(2, 1, 1, 3).getValues()[0];
+      const h = Number(pRow[0]);
+      const w = Number(pRow[1]);
+      const u = pRow[2] ? toIsoDateSafe(pRow[2]) : undefined;
+      if (h > 0 && w > 0) {
+        profile = {
+          heightCm: h,
+          weightKg: w,
+          weightUpdatedAt: u
+        };
+      }
+    }
+
     const result = {
       status: 'success',
       exercises: exercises,
       routineMenus: routineMenus,
       schedule: schedule,
       pastSessions: pastSessions,
-      cardioLogs: cardioLogs
+      cardioLogs: cardioLogs,
+      profile: profile
     };
 
     return ContentService.createTextOutput(JSON.stringify(result))
@@ -769,6 +795,26 @@ function doPost(e) {
       });
       if (rows.length > 0) {
         menuSheet.getRange(2, 1, rows.length, 5).setValues(rows);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 身体データ（身長・体重）の保存
+    if (data.action === 'SAVE_PROFILE' && data.profile) {
+      const p = data.profile;
+      let profSheet = ss.getSheetByName('user_profile');
+      if (!profSheet) {
+        profSheet = ss.insertSheet('user_profile');
+        profSheet.appendRow(['height_cm', 'weight_kg', 'updated_at']);
+        profSheet.getRange(1, 1, 1, 3).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
+      }
+      const updatedAt = p.weightUpdatedAt || new Date().toISOString();
+      if (profSheet.getLastRow() >= 2) {
+        profSheet.getRange(2, 1, 1, 3).setValues([[Number(p.heightCm) || 170, Number(p.weightKg) || 65, updatedAt]]);
+      } else {
+        profSheet.appendRow([Number(p.heightCm) || 170, Number(p.weightKg) || 65, updatedAt]);
       }
 
       return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))

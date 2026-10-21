@@ -32,6 +32,7 @@ const KEYS = {
   ACTIVE_SESSION: 'wl_active_session',
   CARDIO_TYPES: 'wl_cardio_types',
   CARDIO_LOGS: 'wl_cardio_logs',
+  USER_PROFILE: 'wl_user_profile',
   DATA_VERSION: 'wl_data_version',
 };
 
@@ -215,16 +216,35 @@ export const StorageService = {
 
   // 設定
   getSettings(): AppSettings {
-    const s = getStored<AppSettings>(KEYS.SETTINGS, INITIAL_SETTINGS);
+    const s = getStored<AppSettings>(KEYS.SETTINGS, {
+      ...INITIAL_SETTINGS,
+      profile: { ...INITIAL_SETTINGS.profile },
+    });
+    const backupProfile = getStored<UserProfile | null>(KEYS.USER_PROFILE, null);
     let changed = false;
-    // profileフィールドが存在しない場合のマイグレーション
-    if (!s.profile) {
-      s.profile = INITIAL_SETTINGS.profile;
+
+    // profileフィールドが存在しない場合、またはバックアップ側に更新済みデータがある場合の復元
+    if (!s.profile || !s.profile.heightCm || !s.profile.weightKg) {
+      s.profile = backupProfile && backupProfile.heightCm > 0 && backupProfile.weightKg > 0
+        ? { ...backupProfile }
+        : { ...INITIAL_SETTINGS.profile };
       changed = true;
+    } else if (backupProfile && backupProfile.heightCm > 0 && backupProfile.weightKg > 0) {
+      const sIsDefault =
+        !s.profile.weightUpdatedAt &&
+        s.profile.heightCm === INITIAL_SETTINGS.profile.heightCm &&
+        s.profile.weightKg === INITIAL_SETTINGS.profile.weightKg;
+      const backupTime = backupProfile.weightUpdatedAt ? new Date(backupProfile.weightUpdatedAt).getTime() : 0;
+      const sTime = s.profile.weightUpdatedAt ? new Date(s.profile.weightUpdatedAt).getTime() : 0;
+      if (sIsDefault || backupTime > sTime) {
+        s.profile = { ...backupProfile };
+        changed = true;
+      }
     }
+
     // cardioShortcutsフィールドが存在しない場合のマイグレーション
     if (!s.cardioShortcuts) {
-      s.cardioShortcuts = INITIAL_SETTINGS.cardioShortcuts;
+      s.cardioShortcuts = { ...INITIAL_SETTINGS.cardioShortcuts! };
       changed = true;
     }
     // gasWebAppUrlが空、または旧デプロイURL（AKfycbxi...等）が残っている場合は最新デプロイURLに自動更新
@@ -243,10 +263,13 @@ export const StorageService = {
   },
   saveSettings(data: AppSettings): void {
     setStored(KEYS.SETTINGS, data);
+    if (data.profile && data.profile.heightCm > 0 && data.profile.weightKg > 0) {
+      setStored(KEYS.USER_PROFILE, data.profile);
+    }
   },
   saveUserProfile(profile: UserProfile): void {
     const settings = this.getSettings();
-    settings.profile = profile;
+    settings.profile = { ...profile };
     this.saveSettings(settings);
   },
 

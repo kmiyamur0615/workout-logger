@@ -82,6 +82,36 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   }, [settings.gasWebAppUrl]);
 
+  React.useEffect(() => {
+    if (settings.profile?.heightCm) {
+      setHeight(settings.profile.heightCm.toString());
+    }
+    if (settings.profile?.weightKg) {
+      setWeight(settings.profile.weightKg.toString());
+    }
+  }, [settings.profile?.heightCm, settings.profile?.weightKg]);
+
+  // 身長・体重の入力時に即座にローカル保存し、フォーカスアウト時にGASへも同期する
+  const commitProfileChange = (nextHeightStr: string, nextWeightStr: string, syncToRemote: boolean) => {
+    const parsedH = parseFloat(nextHeightStr);
+    const parsedW = parseFloat(nextWeightStr);
+    const validH = !isNaN(parsedH) && parsedH >= 100 && parsedH <= 250 ? parsedH : (settings.profile?.heightCm || 172);
+    const validW = !isNaN(parsedW) && parsedW >= 20 && parsedW <= 300 ? parsedW : (settings.profile?.weightKg || 68);
+
+    const updated: AppSettings = {
+      ...StorageService.getSettings(),
+      profile: {
+        heightCm: validH,
+        weightKg: validW,
+        weightUpdatedAt: new Date().toISOString(),
+      },
+    };
+    StorageService.saveSettings(updated);
+    if (syncToRemote) {
+      onSaveSettings(updated);
+    }
+  };
+
   // 筋トレ種目追加
   const [exerciseFilterPart, setExerciseFilterPart] = useState<string>('all');
   const [newExerciseName, setNewExerciseName] = useState('');
@@ -113,7 +143,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       profile: {
         heightCm: parseFloat(height) || 170,
         weightKg: parseFloat(weight) || 65,
-        weightUpdatedAt: settings.profile?.weightUpdatedAt,
+        weightUpdatedAt: new Date().toISOString(),
       },
       gasWebAppUrl: gasUrl.trim(),
       appleShortcutName: shortcutName.trim() || 'WorkoutLoggerSync',
@@ -131,6 +161,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   };
 
   const handleFetchWeightFromHealth = () => {
+    commitProfileChange(height, weight, true);
     const currentOrigin = window.location.origin + window.location.pathname;
     const shortcutCmd = `GetWeightFromHealth`;
     const targetUrl = `shortcuts://run-shortcut?name=${encodeURIComponent(shortcutCmd)}&input=text&text=${encodeURIComponent(currentOrigin)}`;
@@ -471,7 +502,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               type="number"
               step="0.5"
               value={height}
-              onChange={(e) => setHeight(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setHeight(next);
+                commitProfileChange(next, weight, false);
+              }}
+              onBlur={() => commitProfileChange(height, weight, true)}
               placeholder="172"
               className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-neon font-mono font-bold"
             />
@@ -485,7 +521,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               type="number"
               step="0.1"
               value={weight}
-              onChange={(e) => setWeight(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setWeight(next);
+                commitProfileChange(height, next, false);
+              }}
+              onBlur={() => commitProfileChange(height, weight, true)}
               placeholder="68.0"
               className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-neon font-mono font-bold"
             />

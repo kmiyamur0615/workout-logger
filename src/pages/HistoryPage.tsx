@@ -789,16 +789,18 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                 />
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <label className="block text-[11px] font-semibold text-slate-300 mb-1">
                   開始日時
                 </label>
-                <input
-                  type="datetime-local"
-                  value={toInputDateTime(editingSession.startedAt)}
-                  onChange={(e) => setEditingSession({ ...editingSession, startedAt: new Date(e.target.value).toISOString() })}
-                  className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-neon font-mono"
-                />
+                <div className="w-full overflow-hidden bg-dark-800 border border-dark-700 rounded-xl focus-within:border-brand-neon">
+                  <input
+                    type="datetime-local"
+                    value={toInputDateTime(editingSession.startedAt)}
+                    onChange={(e) => setEditingSession({ ...editingSession, startedAt: new Date(e.target.value).toISOString() })}
+                    className="block w-full max-w-full min-w-0 box-border appearance-none bg-transparent border-0 px-3 py-2 text-xs text-white focus:outline-none font-mono"
+                  />
+                </div>
               </div>
 
               <div>
@@ -942,23 +944,6 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                    距離 (km)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editingCardio.distanceKm}
-                    onChange={(e) => {
-                      const updated = { ...editingCardio, distanceKm: parseFloat(e.target.value) || 0 };
-                      updated.calories = handleRecalculateCalories(updated);
-                      setEditingCardio(updated);
-                    }}
-                    className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
                     時間 (分)
                   </label>
                   <input
@@ -973,18 +958,37 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                     className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono font-bold"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    距離 (km)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingCardio.distanceKm}
+                    onChange={(e) => {
+                      const updated = { ...editingCardio, distanceKm: parseFloat(e.target.value) || 0 };
+                      updated.calories = handleRecalculateCalories(updated);
+                      setEditingCardio(updated);
+                    }}
+                    className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono font-bold"
+                  />
+                </div>
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <label className="block text-[11px] font-semibold text-slate-300 mb-1">
                   終了日時
                 </label>
-                <input
-                  type="datetime-local"
-                  value={toInputDateTime(editingCardio.endedAt)}
-                  onChange={(e) => setEditingCardio({ ...editingCardio, endedAt: new Date(e.target.value).toISOString() })}
-                  className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
-                />
+                <div className="w-full overflow-hidden bg-dark-800 border border-dark-700 rounded-xl focus-within:border-amber-400">
+                  <input
+                    type="datetime-local"
+                    value={toInputDateTime(editingCardio.endedAt)}
+                    onChange={(e) => setEditingCardio({ ...editingCardio, endedAt: new Date(e.target.value).toISOString() })}
+                    className="block w-full max-w-full min-w-0 box-border appearance-none bg-transparent border-0 px-3 py-2 text-xs text-white focus:outline-none font-mono"
+                  />
+                </div>
               </div>
 
               <div>

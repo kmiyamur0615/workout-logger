@@ -67,3 +67,17 @@ html.is-standalone {
 .app-nav {
   padding-bottom: var(--safe-bottom) !important;
 }
+
+/* iOS Safariでの datetime-local 等の右側のはみ出し防止 */
+input[type="datetime-local"],
+input[type="date"],
+input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
