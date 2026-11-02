@@ -31,12 +31,12 @@ export const HealthSyncService = {
     const startDate = startedAt.toISOString().replace(/\.\d{3}Z$/, 'Z');
     const endDate = endedAt.toISOString().replace(/\.\d{3}Z$/, 'Z');
 
-    // 筋トレの推定消費カロリー算出 (METs 4.5 基準)
+    // 筋トレの推定アクティブ消費カロリー算出 (METs 4.5 基準、安静時代謝 1.0 MET を控除)
     let weightKg = 68;
     try {
       weightKg = StorageService.getSettings().profile?.weightKg || 68;
     } catch (_) {}
-    const caloriesNum = Math.max(15, Math.round(4.5 * weightKg * (durationMinutes / 60) * 1.05));
+    const caloriesNum = Math.max(15, Math.round(1.05 * (4.5 - 1.0) * weightKg * (durationMinutes / 60)));
 
     const payload = {
       workoutType: 'Traditional Strength Training',

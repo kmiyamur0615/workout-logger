@@ -215,15 +215,62 @@ export function App() {
         setBodyParts(updatedBodyParts);
         setActiveSession(StorageService.getOrCreateTodaySession());
 
-        // 5. 有酸素運動履歴 (cardioLogs) の双方向同期
+        // 4.8. 有酸素種別マスタ (cardioTypes) の同期
+        const localCardioTypes = StorageService.getCardioTypes();
+        let mergedCardioTypes = localCardioTypes;
+        let shouldUploadCardioTypes = false;
+        if (Array.isArray(data.cardioTypes) && data.cardioTypes.length > 0) {
+          const remoteTypeIds = new Set(data.cardioTypes.map((t: CardioType) => t.id));
+          const remoteTypeNames = new Set(data.cardioTypes.map((t: CardioType) => t.name.trim()));
+          const localMissingTypes = localCardioTypes.filter(
+            t => !remoteTypeIds.has(t.id) && !remoteTypeNames.has(t.name.trim())
+          );
+          if (localMissingTypes.length > 0) {
+            shouldUploadCardioTypes = true;
+          }
+          mergedCardioTypes = [...data.cardioTypes, ...localMissingTypes];
+          StorageService.saveCardioTypes(mergedCardioTypes);
+          setCardioTypes(mergedCardioTypes);
+        } else if (localCardioTypes.some(t => t.isCustom)) {
+          shouldUploadCardioTypes = true;
+        }
+
+        const cardioTypeByName = new Map<string, CardioType>();
+        mergedCardioTypes.forEach(t => {
+          cardioTypeByName.set(t.name.trim(), t);
+        });
+
+        // 5. 有酸素運動履歴 (cardioLogs) の双方向同期（カスタム種別のID・METsを保護）
         const remoteCardio: CardioLog[] = Array.isArray(data.cardioLogs) ? data.cardioLogs : [];
         const currentLocalCardio = StorageService.getCardioLogs();
+        const localCardioById = new Map<string, CardioLog>();
+        currentLocalCardio.forEach(c => {
+          if (c.id) localCardioById.set(c.id, c);
+        });
         const remoteCardioIds = new Set(remoteCardio.map(c => c.id));
         const localOnlyCardio = currentLocalCardio.filter(c => !remoteCardioIds.has(c.id));
 
         const mergedCardioMap = new Map<string, CardioLog>();
         remoteCardio.forEach(c => {
-          if (c.id) mergedCardioMap.set(c.id, c);
+          if (!c.id) return;
+          const localMatch = localCardioById.get(c.id);
+          const matchedType = cardioTypeByName.get((c.cardioTypeName || '').trim());
+          const preservedTypeId =
+            localMatch && localMatch.cardioTypeId && localMatch.cardioTypeId !== 'cardio-custom'
+              ? localMatch.cardioTypeId
+              : c.cardioTypeId && c.cardioTypeId !== 'cardio-custom'
+              ? c.cardioTypeId
+              : matchedType
+              ? matchedType.id
+              : 'cardio-custom';
+          const preservedMets =
+            c.mets ?? localMatch?.mets ?? matchedType?.defaultMets;
+
+          mergedCardioMap.set(c.id, {
+            ...c,
+            cardioTypeId: preservedTypeId,
+            mets: preservedMets,
+          });
         });
         currentLocalCardio.forEach(c => {
           if (c.id && !mergedCardioMap.has(c.id)) {
@@ -282,6 +329,13 @@ export function App() {
           uploadPromises.push(
             GasApiService.syncProfile(gasUrl, StorageService.getSettings().profile).catch(e =>
               console.error('身体データのGAS同期失敗:', e)
+            )
+          );
+        }
+        if (shouldUploadCardioTypes) {
+          uploadPromises.push(
+            GasApiService.syncCardioTypes(gasUrl, mergedCardioTypes).catch(e =>
+              console.error('有酸素種別マスタのGAS同期失敗:', e)
             )
           );
         }
@@ -553,12 +607,26 @@ export function App() {
 
   const handleAddCardioType = (type: CardioType) => {
     StorageService.addCardioType(type);
-    setCardioTypes(StorageService.getCardioTypes());
+    const updated = StorageService.getCardioTypes();
+    setCardioTypes(updated);
+    const gasUrl = StorageService.getSettings().gasWebAppUrl;
+    if (gasUrl) {
+      GasApiService.syncCardioTypes(gasUrl, updated).catch(err =>
+        console.error('GASへの有酸素種別追加同期に失敗:', err)
+      );
+    }
   };
 
   const handleDeleteCardioType = (typeId: string) => {
     StorageService.deleteCardioType(typeId);
-    setCardioTypes(StorageService.getCardioTypes());
+    const updated = StorageService.getCardioTypes();
+    setCardioTypes(updated);
+    const gasUrl = StorageService.getSettings().gasWebAppUrl;
+    if (gasUrl) {
+      GasApiService.syncCardioTypes(gasUrl, updated).catch(err =>
+        console.error('GASへの有酸素種別削除同期に失敗:', err)
+      );
+    }
   };
 
   const hasTodayExercises = activeSession.exercises.length > 0;
@@ -658,7 +726,10 @@ export function App() {
 
       <Navigation
         currentTab={currentTab}
-        onChangeTab={setCurrentTab}
+        onChangeTab={(tab) => {
+          setSettings(StorageService.getSettings());
+          setCurrentTab(tab);
+        }}
         hasActiveWorkout={hasTodayExercises}
         hapticsEnabled={settings.hapticsEnabled}
       />

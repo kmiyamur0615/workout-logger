@@ -581,6 +581,27 @@ function doGet(e) {
       return new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime();
     });
 
+    // 4.5. cardio_types (有酸素種別マスタ)
+    const ctSheet = ss.getSheetByName('cardio_types');
+    const ctData = ctSheet ? ctSheet.getDataRange().getValues() : [];
+    const cardioTypes = [];
+    const cardioTypeByName = {};
+    for (let i = 1; i < ctData.length; i++) {
+      const row = ctData[i];
+      const tId = String(row[0] || '').trim();
+      const tName = String(row[1] || '').trim();
+      const tMets = Number(row[2]) || 6.0;
+      if (!tId || !tName) continue;
+      const ctObj = {
+        id: tId,
+        name: tName,
+        defaultMets: tMets,
+        isCustom: tId !== 'cardio-run' && tId !== 'cardio-cycle' && tId !== 'cardio-walk'
+      };
+      cardioTypes.push(ctObj);
+      cardioTypeByName[tName] = ctObj;
+    }
+
     // 5. cardio_logs (有酸素運動ログ) - 重複IDを排除
     const clSheet = ss.getSheetByName('cardio_logs');
     const clData = clSheet ? clSheet.getDataRange().getValues() : [];
@@ -593,7 +614,8 @@ function doGet(e) {
       processedCardioIds[cId] = true;
       const cName = String(row[1] || '有酸素運動').trim();
       let cTypeId = 'cardio-custom';
-      if (cName.indexOf('ランニング') >= 0) cTypeId = 'cardio-run';
+      if (cardioTypeByName[cName]) cTypeId = cardioTypeByName[cName].id;
+      else if (cName.indexOf('ランニング') >= 0) cTypeId = 'cardio-run';
       else if (cName.indexOf('サイクリング') >= 0 || cName.indexOf('バイク') >= 0) cTypeId = 'cardio-cycle';
       else if (cName.indexOf('ウォーキング') >= 0) cTypeId = 'cardio-walk';
 
@@ -640,6 +662,7 @@ function doGet(e) {
       routineMenus: routineMenus,
       schedule: schedule,
       pastSessions: pastSessions,
+      cardioTypes: cardioTypes,
       cardioLogs: cardioLogs,
       profile: profile
     };
@@ -812,9 +835,32 @@ function doPost(e) {
       }
       const updatedAt = p.weightUpdatedAt || new Date().toISOString();
       if (profSheet.getLastRow() >= 2) {
-        profSheet.getRange(2, 1, 1, 3).setValues([[Number(p.heightCm) || 170, Number(p.weightKg) || 65, updatedAt]]);
+        profSheet.getRange(2, 1, 1, 3).setValues([[Number(p.heightCm) || 172, Number(p.weightKg) || 68, updatedAt]]);
       } else {
-        profSheet.appendRow([Number(p.heightCm) || 170, Number(p.weightKg) || 65, updatedAt]);
+        profSheet.appendRow([Number(p.heightCm) || 172, Number(p.weightKg) || 68, updatedAt]);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 有酸素種別マスタの保存
+    if (data.action === 'SAVE_CARDIO_TYPES' && Array.isArray(data.cardioTypes)) {
+      let ctSheet = ss.getSheetByName('cardio_types');
+      if (!ctSheet) {
+        ctSheet = ss.insertSheet('cardio_types');
+        ctSheet.appendRow(['type_id', 'name', 'default_mets']);
+        ctSheet.getRange(1, 1, 1, 3).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
+      }
+      const lastRow = ctSheet.getLastRow();
+      if (lastRow > 1) {
+        ctSheet.getRange(2, 1, lastRow - 1, 3).clearContent();
+      }
+      const rows = data.cardioTypes.map(function(ct) {
+        return [ct.id, ct.name, Number(ct.defaultMets) || 6.0];
+      });
+      if (rows.length > 0) {
+        ctSheet.getRange(2, 1, rows.length, 3).setValues(rows);
       }
 
       return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))

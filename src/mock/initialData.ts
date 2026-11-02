@@ -612,7 +612,8 @@ export const INITIAL_CARDIO_LOGS: CardioLog[] = [
     distanceKm: 5.0,
     durationMinutes: 30,
     endedAt: '2026-10-07T18:00:00.000+09:00',
-    calories: 357,
+    calories: 328,
+    mets: 10.2,
     note: 'トレッドミル傾斜1%'
   }
 ];

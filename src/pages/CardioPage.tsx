@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Activity, Flame, Plus, Check, Calendar, Smartphone, RefreshCw } from 'lucide-react';
 import { CardioType, CardioLog, UserProfile, AppSettings } from '../types';
-import { calculateCardioCalories } from '../services/calorieCalculator';
+import { calculateCardioCaloriesDetails } from '../services/calorieCalculator';
 import { HealthSyncService } from '../services/healthSync';
 import { GasApiService } from '../services/gasApi';
 import { StorageService } from '../services/storage';
@@ -48,7 +48,7 @@ export const CardioPage: React.FC<CardioPageProps> = ({
 
   const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    if (val === '' || /^\d*$/.test(val)) {
+    if (val === '' || /^\d*\.?\d*$/.test(val)) {
       setDuration(val);
     }
   };
@@ -69,16 +69,21 @@ export const CardioPage: React.FC<CardioPageProps> = ({
     settings || { cardioShortcutName }
   );
 
-  const calculatedCalories = currentType
-    ? calculateCardioCalories({
+  const effectiveWeightKg = userProfile.weightKg > 0 ? userProfile.weightKg : 68;
+
+  const calcDetails = currentType
+    ? calculateCardioCaloriesDetails({
+        cardioTypeId: currentType.id,
         cardioTypeName: currentType.name,
         defaultMets: currentType.defaultMets || 6.0,
+        isCustom: currentType.isCustom,
         distanceKm: distanceNum,
         durationMinutes: durationNum,
-        weightKg: userProfile.weightKg || 65,
-        heightCm: userProfile.heightCm || 170,
+        weightKg: effectiveWeightKg,
       })
-    : 0;
+    : null;
+
+  const calculatedCalories = calcDetails ? calcDetails.calories : 0;
 
   const handleSave = async (shouldSyncHealth: boolean = true) => {
     if (isSaving || isSavedSuccess) return;
@@ -116,6 +121,7 @@ export const CardioPage: React.FC<CardioPageProps> = ({
       durationMinutes: durationNum,
       endedAt: safeEndedAt,
       calories: calculatedCalories,
+      mets: calcDetails ? Math.round(calcDetails.effectiveMets * 10) / 10 : undefined,
       note: note.trim() || undefined,
     };
 
@@ -305,7 +311,7 @@ export const CardioPage: React.FC<CardioPageProps> = ({
             </label>
             <input
               type="text"
-              inputMode="numeric"
+              inputMode="decimal"
               value={duration}
               onChange={handleDurationChange}
               placeholder="0"
@@ -351,9 +357,19 @@ export const CardioPage: React.FC<CardioPageProps> = ({
               <Flame className="w-6 h-6 text-amber-400 animate-pulse" />
             </div>
             <div>
-              <div className="text-xs font-bold text-amber-300">推定消費カロリー</div>
+              <div className="text-xs font-bold text-amber-300">推定消費カロリー (アクティブ)</div>
               <div className="text-[10px] text-slate-400">
-                体重 {userProfile.weightKg}kg / 身長 {userProfile.heightCm}cm 基準
+                {calcDetails && durationNum > 0 ? (
+                  calcDetails.usedDynamicSpeed && calcDetails.speedKmH !== null ? (
+                    `体重 ${effectiveWeightKg}kg · 時速 ${calcDetails.speedKmH.toFixed(1)}km/h (${calcDetails.effectiveMets.toFixed(1)} METs)`
+                  ) : calcDetails.isSpeedOutOfRange ? (
+                    `体重 ${effectiveWeightKg}kg · 速度範囲外のため基準 ${calcDetails.effectiveMets.toFixed(1)} METs`
+                  ) : (
+                    `体重 ${effectiveWeightKg}kg · 基準 ${calcDetails.effectiveMets.toFixed(1)} METs`
+                  )
+                ) : (
+                  `体重 ${effectiveWeightKg}kg 基準（安静時代謝を除く純消費）`
+                )}
               </div>
             </div>
           </div>

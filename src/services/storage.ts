@@ -279,8 +279,11 @@ export const StorageService = {
       const params = new URLSearchParams(window.location.search);
       const weightStr = params.get('weight');
       if (weightStr) {
-        const weight = parseFloat(weightStr);
-        if (!isNaN(weight) && weight > 20 && weight < 300) {
+        const trimmed = weightStr.trim();
+        const isPounds = /\b(lbs?|pounds?)\b/i.test(trimmed) || /\d\s*(lbs?|pounds?)$/i.test(trimmed);
+        const rawNum = parseFloat(trimmed.replace(/,/g, ''));
+        const weight = !isNaN(rawNum) ? (isPounds ? rawNum * 0.45359237 : rawNum) : NaN;
+        if (!isNaN(weight) && weight >= 20 && weight <= 300) {
           const settings = this.getSettings();
           settings.profile.weightKg = Math.round(weight * 10) / 10;
           settings.profile.weightUpdatedAt = new Date().toISOString();

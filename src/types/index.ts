@@ -123,7 +123,8 @@ export interface CardioLog {
   distanceKm: number; // 距離(km)
   durationMinutes: number; // 時間(分)
   endedAt: string; // 終了日時 (ISO)
-  calories: number; // 消費カロリー (kcal, 自動計算)
+  calories: number; // 消費カロリー (kcal, アクティブ消費カロリー自動計算)
+  mets?: number; // 計算時に適用された実効METs
   note?: string;
 }
 

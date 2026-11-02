@@ -1,4 +1,4 @@
-import { WorkoutSession, CardioLog, Exercise, WeekdaySchedule, RoutineMenu, UserProfile } from '../types';
+import { WorkoutSession, CardioLog, CardioType, Exercise, WeekdaySchedule, RoutineMenu, UserProfile } from '../types';
 
 export const GasApiService = {
   // スプレッドシートからマスタ・履歴取得 (doGet)
@@ -207,6 +207,31 @@ export const GasApiService = {
       return resJson.status === 'success';
     } catch (err) {
       console.error('GAS身体データ同期エラー:', err);
+      return false;
+    }
+  },
+
+  // 有酸素種別マスタの送信
+  async syncCardioTypes(gasUrl: string, cardioTypes: CardioType[]): Promise<boolean> {
+    if (!gasUrl || !Array.isArray(cardioTypes)) return false;
+
+    try {
+      const payload = {
+        action: 'SAVE_CARDIO_TYPES',
+        cardioTypes
+      };
+
+      const response = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) return false;
+      const resJson = await response.json();
+      return resJson.status === 'success';
+    } catch (err) {
+      console.error('GAS有酸素種別マスタ同期エラー:', err);
       return false;
     }
   }

@@ -17,7 +17,7 @@ import {
   Trophy
 } from 'lucide-react';
 import { WorkoutSession, CardioLog, CardioType, UserProfile, WorkoutSet, ExerciseMaxRecord } from '../types';
-import { calculateCardioCalories } from '../services/calorieCalculator';
+import { calculateCardioCaloriesDetails } from '../services/calorieCalculator';
 import { calculate1RM } from '../services/storage';
 
 interface HistoryPageProps {
@@ -130,16 +130,30 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
     setEditingSession({ ...editingSession, exercises: updatedExercises });
   };
 
-  const handleRecalculateCalories = (c: CardioLog) => {
-    const cType = cardioTypes.find(t => t.id === c.cardioTypeId);
-    return calculateCardioCalories({
+  const resolveCardioType = (c: CardioLog): CardioType | undefined => {
+    return (
+      cardioTypes.find(t => t.id === c.cardioTypeId) ||
+      cardioTypes.find(t => t.name.trim() === (c.cardioTypeName || '').trim())
+    );
+  };
+
+  const applyRecalculatedCalories = (c: CardioLog): CardioLog => {
+    const cType = resolveCardioType(c);
+    const details = calculateCardioCaloriesDetails({
+      cardioTypeId: cType ? cType.id : c.cardioTypeId,
       cardioTypeName: c.cardioTypeName,
-      defaultMets: cType?.defaultMets || 6.0,
+      defaultMets: cType?.defaultMets || c.mets || 6.0,
+      isCustom: cType ? cType.isCustom : c.cardioTypeId?.startsWith('cardio-custom'),
       distanceKm: c.distanceKm || 0,
       durationMinutes: c.durationMinutes || 0,
-      weightKg: userProfile.weightKg || 65,
-      heightCm: userProfile.heightCm || 170,
+      weightKg: userProfile.weightKg > 0 ? userProfile.weightKg : 68,
     });
+    return {
+      ...c,
+      cardioTypeId: cType ? cType.id : c.cardioTypeId,
+      calories: details.calories,
+      mets: Math.round(details.effectiveMets * 10) / 10,
+    };
   };
 
   const handleSaveEditedCardio = () => {
@@ -919,15 +933,14 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                   運動種別
                 </label>
                 <select
-                  value={editingCardio.cardioTypeId}
+                  value={resolveCardioType(editingCardio)?.id || editingCardio.cardioTypeId}
                   onChange={(e) => {
                     const sel = cardioTypes.find(t => t.id === e.target.value);
-                    const updated = {
+                    const updated = applyRecalculatedCalories({
                       ...editingCardio,
                       cardioTypeId: e.target.value,
                       cardioTypeName: sel ? sel.name : editingCardio.cardioTypeName,
-                    };
-                    updated.calories = handleRecalculateCalories(updated);
+                    });
                     setEditingCardio(updated);
                   }}
                   className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-bold"
@@ -935,7 +948,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                   {cardioTypes.map(t => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
-                  {!cardioTypes.some(t => t.id === editingCardio.cardioTypeId) && (
+                  {!resolveCardioType(editingCardio) && (
                     <option value={editingCardio.cardioTypeId}>{editingCardio.cardioTypeName}</option>
                   )}
                 </select>
@@ -948,11 +961,13 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                   </label>
                   <input
                     type="number"
-                    step="1"
+                    step="any"
                     value={editingCardio.durationMinutes}
                     onChange={(e) => {
-                      const updated = { ...editingCardio, durationMinutes: parseFloat(e.target.value) || 0 };
-                      updated.calories = handleRecalculateCalories(updated);
+                      const updated = applyRecalculatedCalories({
+                        ...editingCardio,
+                        durationMinutes: parseFloat(e.target.value) || 0,
+                      });
                       setEditingCardio(updated);
                     }}
                     className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono font-bold"
@@ -968,8 +983,10 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                     step="0.01"
                     value={editingCardio.distanceKm}
                     onChange={(e) => {
-                      const updated = { ...editingCardio, distanceKm: parseFloat(e.target.value) || 0 };
-                      updated.calories = handleRecalculateCalories(updated);
+                      const updated = applyRecalculatedCalories({
+                        ...editingCardio,
+                        distanceKm: parseFloat(e.target.value) || 0,
+                      });
                       setEditingCardio(updated);
                     }}
                     className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono font-bold"
@@ -985,7 +1002,12 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                   <input
                     type="datetime-local"
                     value={toInputDateTime(editingCardio.endedAt)}
-                    onChange={(e) => setEditingCardio({ ...editingCardio, endedAt: new Date(e.target.value).toISOString() })}
+                    onChange={(e) => {
+                      const d = new Date(e.target.value);
+                      if (!isNaN(d.getTime())) {
+                        setEditingCardio({ ...editingCardio, endedAt: d.toISOString() });
+                      }
+                    }}
                     className="block w-full max-w-full min-w-0 box-border appearance-none bg-transparent border-0 px-3 py-2 text-xs text-white focus:outline-none font-mono"
                   />
                 </div>
@@ -993,18 +1015,18 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                  消費カロリー (kcal)
+                  消費カロリー (アクティブ kcal)
                 </label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
                     value={editingCardio.calories}
-                    onChange={(e) => setEditingCardio({ ...editingCardio, calories: parseInt(e.target.value) || 0 })}
+                    onChange={(e) => setEditingCardio({ ...editingCardio, calories: parseInt(e.target.value, 10) || 0 })}
                     className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-xs text-amber-400 focus:outline-none focus:border-amber-400 font-mono font-bold"
                   />
                   <button
                     type="button"
-                    onClick={() => setEditingCardio({ ...editingCardio, calories: handleRecalculateCalories(editingCardio) })}
+                    onClick={() => setEditingCardio(applyRecalculatedCalories(editingCardio))}
                     className="px-2.5 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-[10px] text-slate-300 whitespace-nowrap border border-dark-700 active:scale-95"
                   >
                     再計算

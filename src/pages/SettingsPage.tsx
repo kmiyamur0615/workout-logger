@@ -138,11 +138,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   ];
 
   const handleSaveAll = () => {
+    const parsedH = parseFloat(height);
+    const parsedW = parseFloat(weight);
+    const validH = !isNaN(parsedH) && parsedH >= 100 && parsedH <= 250 ? parsedH : (settings.profile?.heightCm || 172);
+    const validW = !isNaN(parsedW) && parsedW >= 20 && parsedW <= 300 ? parsedW : (settings.profile?.weightKg || 68);
+    setHeight(validH.toString());
+    setWeight(validW.toString());
+
     const updated: AppSettings = {
       ...settings,
       profile: {
-        heightCm: parseFloat(height) || 170,
-        weightKg: parseFloat(weight) || 65,
+        heightCm: validH,
+        weightKg: validW,
         weightUpdatedAt: new Date().toISOString(),
       },
       gasWebAppUrl: gasUrl.trim(),
@@ -770,7 +777,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-slate-300">アプリバージョン</span>
           <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-brand-neon/15 text-brand-neon font-bold">
-            v1.6 (PWA自動同期対応)
+            v1.7 (高精度カロリー計算対応)
           </span>
         </div>
         <p className="text-[10px] text-slate-400 leading-relaxed">
