@@ -266,6 +266,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       pastSessions: StorageService.getPastSessions(),
       cardioTypes: StorageService.getCardioTypes(),
       cardioLogs: StorageService.getCardioLogs(),
+      bodyMetrics: StorageService.getBodyMetrics(),
       settings: StorageService.getSettings(),
       exportedAt: new Date().toISOString()
     };
@@ -546,7 +547,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           className="w-full py-2.5 px-3 rounded-xl bg-dark-800 hover:bg-dark-750 active:scale-98 text-xs font-semibold text-amber-400 border border-amber-500/30 transition-all flex items-center justify-center gap-1.5 shadow-sm"
         >
           <ArrowDownToLine className="w-4 h-4" />
-          <span>Appleヘルスケアから最新体重を取得</span>
+          <span>Appleヘルスケアから体組成・体重を取得</span>
         </button>
       </div>
 

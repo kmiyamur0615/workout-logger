@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Dumbbell, CheckCircle2, X, Sparkles, Check, Smartphone } from 'lucide-react';
-import { WorkoutSession, WorkoutExercise, WorkoutSet, Exercise, BodyPart, EquipmentType, RoutineMenu } from '../types';
+import { WorkoutSession, WorkoutExercise, WorkoutSet, Exercise, BodyPart, EquipmentType, RoutineMenu, WeekdaySchedule, DayOfWeek } from '../types';
 import { ExerciseCard } from '../components/ExerciseCard';
 import { WorkoutModal } from '../components/WorkoutModal';
 import { GasApiService } from '../services/gasApi';
@@ -23,6 +23,7 @@ interface WorkoutPageProps {
   exercises: Exercise[];
   bodyParts: BodyPart[];
   routineMenus?: RoutineMenu[];
+  schedule?: WeekdaySchedule[];
   onLoadMenu?: (menuId: string) => void;
   onCreateExercise?: (exercise: Exercise) => void;
 }
@@ -34,6 +35,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
   exercises,
   bodyParts,
   routineMenus = [],
+  schedule = [],
   onLoadMenu,
   onCreateExercise,
 }) => {
@@ -401,24 +403,42 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
                 <span className="text-xs font-bold text-slate-300">登録メニューから種目を一括セット</span>
               </div>
               <div className="grid grid-cols-1 gap-2">
-                {routineMenus.map(menu => (
-                  <button
-                    key={menu.id}
-                    type="button"
-                    onClick={() => onLoadMenu(menu.id)}
-                    className="w-full text-left p-3 rounded-2xl bg-dark-900 hover:bg-dark-800 border border-dark-800 hover:border-brand-neon/30 active:scale-98 transition-all flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="text-xs font-bold text-white">{menu.name}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
-                        {menu.targetParts} · {menu.exercises.length}種目
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-bold text-brand-neon px-2.5 py-1 rounded-lg bg-brand-neon/10">
-                      セットする
-                    </span>
-                  </button>
-                ))}
+                {(() => {
+                  const todayDow = new Date().getDay() as DayOfWeek;
+                  const todaySchedMenuId = schedule.find(s => s.dayOfWeek === todayDow)?.menuId || null;
+                  return routineMenus.map(menu => {
+                    const isTodayScheduled = todaySchedMenuId === menu.id;
+                    return (
+                      <button
+                        key={menu.id}
+                        type="button"
+                        onClick={() => onLoadMenu(menu.id)}
+                        className={`w-full text-left p-3 rounded-2xl border active:scale-98 transition-all flex items-center justify-between ${
+                          isTodayScheduled
+                            ? 'bg-brand-neon/10 border-brand-neon/50 hover:bg-brand-neon/15'
+                            : 'bg-dark-900 hover:bg-dark-800 border-dark-800 hover:border-brand-neon/30'
+                        }`}
+                      >
+                        <div>
+                          <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <span>{menu.name}</span>
+                            {isTodayScheduled && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-neon text-dark-950 font-black">
+                                本日の予定
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            {menu.targetParts} · {menu.exercises.length}種目
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-bold text-brand-neon px-2.5 py-1 rounded-lg bg-brand-neon/10">
+                          セットする
+                        </span>
+                      </button>
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}

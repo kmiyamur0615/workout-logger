@@ -1,7 +1,7 @@
 import React from 'react';
-import { Home, Dumbbell, Activity, CalendarDays, Settings } from 'lucide-react';
+import { Scale, Dumbbell, Activity, CalendarDays, Settings } from 'lucide-react';
 
-export type TabType = 'home' | 'workout' | 'cardio' | 'history' | 'settings';
+export type TabType = 'body' | 'workout' | 'cardio' | 'history' | 'settings';
 
 interface NavigationProps {
   currentTab: TabType;
@@ -17,7 +17,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   hapticsEnabled = true,
 }) => {
   const tabs = [
-    { id: 'home' as TabType, label: 'ホーム', icon: Home, activeColor: 'text-brand-neon' },
+    { id: 'body' as TabType, label: '体組成', icon: Scale, activeColor: 'text-cyan-400' },
     { 
       id: 'workout' as TabType, 
       label: '筋トレ', 

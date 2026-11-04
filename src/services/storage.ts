@@ -9,7 +9,8 @@ import {
   ExerciseMaxRecord,
   CardioType,
   CardioLog,
-  UserProfile
+  UserProfile,
+  BodyMetricLog
 } from '../types';
 import { 
   INITIAL_BODY_PARTS, 
@@ -33,6 +34,7 @@ const KEYS = {
   CARDIO_TYPES: 'wl_cardio_types',
   CARDIO_LOGS: 'wl_cardio_logs',
   USER_PROFILE: 'wl_user_profile',
+  BODY_METRICS: 'wl_body_metrics',
   DATA_VERSION: 'wl_data_version',
 };
 
@@ -273,32 +275,246 @@ export const StorageService = {
     this.saveSettings(settings);
   },
 
-  // URLクエリパラメータから体重を取得・反映 (iOSショートカット連携用)
-  checkUrlWeightParam(): number | null {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const weightStr = params.get('weight');
-      if (weightStr) {
-        const trimmed = weightStr.trim();
-        const isPounds = /\b(lbs?|pounds?)\b/i.test(trimmed) || /\d\s*(lbs?|pounds?)$/i.test(trimmed);
-        const rawNum = parseFloat(trimmed.replace(/,/g, ''));
-        const weight = !isNaN(rawNum) ? (isPounds ? rawNum * 0.45359237 : rawNum) : NaN;
-        if (!isNaN(weight) && weight >= 20 && weight <= 300) {
-          const settings = this.getSettings();
-          settings.profile.weightKg = Math.round(weight * 10) / 10;
-          settings.profile.weightUpdatedAt = new Date().toISOString();
-          this.saveSettings(settings);
+  // 日付文字列を YYYY-MM-DD に正規化 (iOSショートカットの多様な日付フォーマットに対応)
+  parseFlexibleDateKey(raw?: string | null): string | null {
+    if (!raw) return null;
+    const str = String(raw).trim();
+    if (!str) return null;
 
-          // URLからクエリパラメータを除去（画面リロード時の再取得防止）
-          const cleanUrl = window.location.origin + window.location.pathname;
-          window.history.replaceState({}, document.title, cleanUrl);
-          return settings.profile.weightKg;
+    // 1. YYYY-MM-DD / YYYY/MM/DD / YYYY年M月D日
+    const m1 = str.match(/(\d{4})[-/年.](\d{1,2})[-/月.](\d{1,2})/);
+    if (m1) {
+      const y = Number(m1[1]);
+      const m = Number(m1[2]);
+      const d = Number(m1[3]);
+      if (y >= 2000 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      }
+    }
+
+    // 2. Dateオブジェクトとしてパース試行
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      const y = parsed.getFullYear();
+      if (y >= 2000 && y <= 2100) {
+        return this.getDateKey(parsed);
+      }
+    }
+    return null;
+  },
+
+  // 体重・筋肉量(除脂肪体重)の数値パース (kg / lb 対応)
+  parseMassKgValue(raw?: string | null): number | undefined {
+    if (!raw) return undefined;
+    const trimmed = String(raw).trim();
+    if (!trimmed) return undefined;
+    const isPounds = /\b(lbs?|pounds?)\b/i.test(trimmed) || /\d\s*(lbs?|pounds?)$/i.test(trimmed);
+    const numMatch = trimmed.replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+    if (!numMatch) return undefined;
+    const rawNum = parseFloat(numMatch[0]);
+    if (isNaN(rawNum)) return undefined;
+    const kg = isPounds ? rawNum * 0.45359237 : rawNum;
+    const rounded = Math.round(kg * 10) / 10;
+    if (rounded >= 15 && rounded <= 300) {
+      return rounded;
+    }
+    return undefined;
+  },
+
+  // 体脂肪率(%)の数値パース ("15.4 %", "15.4", または小数 "0.154" に対応)
+  parseBodyFatPctValue(raw?: string | null): number | undefined {
+    if (!raw) return undefined;
+    const trimmed = String(raw).trim();
+    if (!trimmed) return undefined;
+    const numMatch = trimmed.replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+    if (!numMatch) return undefined;
+    let val = parseFloat(numMatch[0]);
+    if (isNaN(val) || val <= 0) return undefined;
+    // HealthKitが 0.154 のような小数比率で返した場合の自動補正
+    if (val > 0.02 && val < 1.0 && !trimmed.includes('%')) {
+      val = val * 100;
+    }
+    const rounded = Math.round(val * 10) / 10;
+    if (rounded >= 2.0 && rounded <= 75.0) {
+      return rounded;
+    }
+    return undefined;
+  },
+
+  // URLクエリパラメータから体組成データ（体重・筋肉量・体脂肪率・日付、単一または複数日分）を取得・反映
+  checkUrlBodyMetricsParam(): { syncedLogs: BodyMetricLog[]; latestLog: BodyMetricLog } | null {
+    try {
+      let params = new URLSearchParams(window.location.search);
+      const bulkParam = params.get('bulk') || params.get('q') || params.get('data');
+      if (bulkParam && bulkParam.includes('=')) {
+        params = new URLSearchParams(bulkParam);
+      } else if (
+        !params.get('weight') &&
+        !params.get('weights') &&
+        !params.get('w') &&
+        !params.get('muscle') &&
+        !params.get('fat') &&
+        window.location.search.includes('%3D')
+      ) {
+        try {
+          params = new URLSearchParams(decodeURIComponent(window.location.search.slice(1)));
+        } catch {
+          // デコード失敗時は通常のparamsを維持
         }
       }
+
+      const weightStr = params.get('weight') || params.get('weights') || params.get('w');
+      const muscleStr =
+        params.get('muscle') ||
+        params.get('muscleMass') ||
+        params.get('lbm') ||
+        params.get('leanBodyMass') ||
+        params.get('m');
+      const fatStr = params.get('fat') || params.get('bodyFat') || params.get('bf') || params.get('f');
+      const dateStr = params.get('date') || params.get('dates') || params.get('wdate') || params.get('d');
+      const mDateStr = params.get('mdate') || params.get('mdates') || params.get('muscleDate');
+      const fDateStr = params.get('fdate') || params.get('fdates') || params.get('fatDate');
+
+      if (!weightStr && !muscleStr && !fatStr) {
+        return null;
+      }
+
+      const splitValues = (s?: string | null): string[] => {
+        if (!s) return [];
+        return String(s)
+          .split(/\r?\n|;|,/)
+          .map(line => line.trim())
+          .filter(Boolean);
+      };
+
+      const splitDates = (s?: string | null): string[] => {
+        if (!s) return [];
+        return String(s)
+          .split(/\r?\n|;|,\s*(?=\d{4})/)
+          .map(line => line.trim())
+          .filter(Boolean);
+      };
+
+      const weights = splitValues(weightStr);
+      const muscles = splitValues(muscleStr);
+      const fats = splitValues(fatStr);
+      const wDates = splitDates(dateStr);
+      const mDates = splitDates(mDateStr);
+      const fDates = splitDates(fDateStr);
+
+      const todayKey = this.getDateKey();
+      const nowIso = new Date().toISOString();
+      const byDate = new Map<string, Partial<BodyMetricLog>>();
+
+      const ensureDateEntry = (dKey: string) => {
+        if (!byDate.has(dKey)) {
+          byDate.set(dKey, {
+            id: `body-${dKey}`,
+            date: dKey,
+            measuredAt: `${dKey}T08:00:00.000+09:00`,
+          });
+        }
+        return byDate.get(dKey)!;
+      };
+
+      // 1. 体重サンプルの格納
+      weights.forEach((wRaw, idx) => {
+        const val = this.parseMassKgValue(wRaw);
+        if (val === undefined) return;
+        const dKey =
+          this.parseFlexibleDateKey(wDates[idx]) ||
+          (idx === 0 && wDates.length === 0 ? todayKey : null);
+        if (!dKey) return;
+        const entry = ensureDateEntry(dKey);
+        if (entry.weightKg === undefined) {
+          entry.weightKg = val;
+        }
+      });
+
+      // 2. 筋肉量（除脂肪体重）サンプルの格納
+      muscles.forEach((mRaw, idx) => {
+        const val = this.parseMassKgValue(mRaw);
+        if (val === undefined) return;
+        let dKey = this.parseFlexibleDateKey(mDates[idx]);
+        if (!dKey && mDates.length === 0) {
+          if (idx < wDates.length) {
+            dKey = this.parseFlexibleDateKey(wDates[idx]);
+          } else if (idx === 0 && wDates.length === 0) {
+            dKey = todayKey;
+          }
+        }
+        if (!dKey) return;
+        const entry = ensureDateEntry(dKey);
+        if (entry.muscleMassKg === undefined) {
+          entry.muscleMassKg = val;
+        }
+      });
+
+      // 3. 体脂肪率サンプルの格納
+      fats.forEach((fRaw, idx) => {
+        const val = this.parseBodyFatPctValue(fRaw);
+        if (val === undefined) return;
+        let dKey = this.parseFlexibleDateKey(fDates[idx]);
+        if (!dKey && fDates.length === 0) {
+          if (idx < wDates.length) {
+            dKey = this.parseFlexibleDateKey(wDates[idx]);
+          } else if (idx === 0 && wDates.length === 0) {
+            dKey = todayKey;
+          }
+        }
+        if (!dKey) return;
+        const entry = ensureDateEntry(dKey);
+        if (entry.bodyFatPct === undefined) {
+          entry.bodyFatPct = val;
+        }
+      });
+
+      const incomingLogs: BodyMetricLog[] = Array.from(byDate.values())
+        .filter(e => e.date && (e.weightKg !== undefined || e.muscleMassKg !== undefined || e.bodyFatPct !== undefined))
+        .map(e => ({
+          id: `body-${e.date}`,
+          date: e.date!,
+          weightKg: e.weightKg,
+          muscleMassKg: e.muscleMassKg,
+          bodyFatPct: e.bodyFatPct,
+          measuredAt: e.date === todayKey ? nowIso : (e.measuredAt || nowIso),
+        }))
+        .sort((a, b) => b.date.localeCompare(a.date));
+
+      if (incomingLogs.length === 0) {
+        return null;
+      }
+
+      const upserted = this.upsertBodyMetrics(incomingLogs);
+
+      // 最新体重があればプロフィール設定の体重も自動更新（有酸素のカロリー計算用）
+      const latestWithWeight = incomingLogs.find(l => l.weightKg && l.weightKg > 0);
+      if (latestWithWeight && latestWithWeight.weightKg) {
+        const settings = this.getSettings();
+        settings.profile.weightKg = latestWithWeight.weightKg;
+        settings.profile.weightUpdatedAt = nowIso;
+        this.saveSettings(settings);
+      }
+
+      // URLからクエリパラメータを除去（画面リロード時の再取得防止）
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+
+      const latestLog = upserted.find(l => l.date === incomingLogs[0].date) || incomingLogs[0];
+      return {
+        syncedLogs: incomingLogs,
+        latestLog,
+      };
     } catch (e) {
       console.error('URLパラメータの解析に失敗しました:', e);
     }
     return null;
+  },
+
+  // 後方互換用
+  checkUrlWeightParam(): number | null {
+    const res = this.checkUrlBodyMetricsParam();
+    return res?.latestLog?.weightKg ?? null;
   },
 
   // 日付キー生成 (YYYY-MM-DD)
@@ -554,5 +770,78 @@ export const StorageService = {
   deleteCardioLog(logId: string): void {
     const logs = this.getCardioLogs().filter(l => l.id !== logId);
     this.saveCardioLogs(logs);
-  }
+  },
+
+  // 体組成・体重推移ログ (Appleヘルスケアから共有されたデータ)
+  getBodyMetrics(): BodyMetricLog[] {
+    const stored = getStored<BodyMetricLog[]>(KEYS.BODY_METRICS, []);
+    if (stored.length > 0) {
+      return stored
+        .filter(m => m && m.date)
+        .sort((a, b) => b.date.localeCompare(a.date));
+    }
+    // 過去にヘルスケアから取得済みの最新体重がprofileにあれば1件目として引き継ぐ
+    const settings = this.getSettings();
+    if (settings.profile?.weightUpdatedAt && settings.profile?.weightKg > 0) {
+      const dKey = this.parseFlexibleDateKey(settings.profile.weightUpdatedAt) || this.getDateKey();
+      const initialEntry: BodyMetricLog = {
+        id: `body-${dKey}`,
+        date: dKey,
+        weightKg: settings.profile.weightKg,
+        measuredAt: settings.profile.weightUpdatedAt,
+      };
+      setStored(KEYS.BODY_METRICS, [initialEntry]);
+      return [initialEntry];
+    }
+    return [];
+  },
+
+  saveBodyMetrics(logs: BodyMetricLog[]): void {
+    const map = new Map<string, BodyMetricLog>();
+    logs.forEach(l => {
+      const dKey = this.parseFlexibleDateKey(l.date) || l.date;
+      if (!dKey) return;
+      if (l.weightKg === undefined && l.muscleMassKg === undefined && l.bodyFatPct === undefined) return;
+      map.set(dKey, {
+        ...l,
+        id: `body-${dKey}`,
+        date: dKey,
+      });
+    });
+    const sorted = Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
+    setStored(KEYS.BODY_METRICS, sorted);
+  },
+
+  upsertBodyMetrics(newLogs: BodyMetricLog[]): BodyMetricLog[] {
+    const existing = this.getBodyMetrics();
+    const map = new Map<string, BodyMetricLog>();
+    existing.forEach(item => {
+      if (item.date) map.set(item.date, { ...item });
+    });
+
+    newLogs.forEach(incoming => {
+      const dKey = this.parseFlexibleDateKey(incoming.date) || incoming.date;
+      if (!dKey) return;
+      const prev = map.get(dKey);
+      const merged: BodyMetricLog = {
+        id: `body-${dKey}`,
+        date: dKey,
+        weightKg: incoming.weightKg !== undefined ? incoming.weightKg : prev?.weightKg,
+        muscleMassKg: incoming.muscleMassKg !== undefined ? incoming.muscleMassKg : prev?.muscleMassKg,
+        bodyFatPct: incoming.bodyFatPct !== undefined ? incoming.bodyFatPct : prev?.bodyFatPct,
+        measuredAt: incoming.measuredAt || prev?.measuredAt || new Date().toISOString(),
+        note: incoming.note !== undefined ? incoming.note : prev?.note,
+      };
+      map.set(dKey, merged);
+    });
+
+    const result = Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
+    this.saveBodyMetrics(result);
+    return result;
+  },
+
+  deleteBodyMetric(date: string): void {
+    const filtered = this.getBodyMetrics().filter(m => m.date !== date);
+    setStored(KEYS.BODY_METRICS, filtered);
+  },
 };

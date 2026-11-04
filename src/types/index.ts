@@ -135,6 +135,17 @@ export interface UserProfile {
   weightUpdatedAt?: string;
 }
 
+// 体組成・体重推移ログ (Appleヘルスケアから取得)
+export interface BodyMetricLog {
+  id: string; // "body-YYYY-MM-DD"
+  date: string; // "YYYY-MM-DD"
+  weightKg?: number; // 体重 (kg)
+  muscleMassKg?: number; // 筋肉量 / 除脂肪体重 (kg)
+  bodyFatPct?: number; // 体脂肪率 (%)
+  measuredAt: string; // 計測・取得日時 (ISO)
+  note?: string;
+}
+
 export interface CardioShortcutsConfig {
   run?: string;
   cycle?: string;

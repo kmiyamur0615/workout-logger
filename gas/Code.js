@@ -126,7 +126,38 @@ function setupSpreadsheet() {
     profSheet.getRange(1, 1, 1, 3).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
   }
 
+  // 9. body_metrics (体組成推移: 体重・筋肉量・体脂肪率)
+  let bmSheet = ss.getSheetByName('body_metrics');
+  if (!bmSheet) {
+    bmSheet = ss.insertSheet('body_metrics');
+    bmSheet.appendRow(['date', 'weight_kg', 'muscle_mass_kg', 'body_fat_pct', 'measured_at', 'note']);
+    bmSheet.getRange(1, 1, 1, 6).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
+  }
+
   Logger.log('スプレッドシートの初期セットアップが完了しました。');
+}
+
+/**
+ * 日付セルまたは文字列を "YYYY-MM-DD" に正規化
+ */
+function normalizeDateKeyGAS(val) {
+  if (!val) return '';
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    return Utilities.formatDate(val, 'Asia/Tokyo', 'yyyy-MM-dd');
+  }
+  const str = String(val).trim();
+  const m = str.match(/(\d{4})[-/年.](\d{1,2})[-/月.](\d{1,2})/);
+  if (m) {
+    const y = m[1];
+    const mo = ('0' + m[2]).slice(-2);
+    const d = ('0' + m[3]).slice(-2);
+    return y + '-' + mo + '-' + d;
+  }
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return Utilities.formatDate(parsed, 'Asia/Tokyo', 'yyyy-MM-dd');
+  }
+  return '';
 }
 
 /**
@@ -656,6 +687,33 @@ function doGet(e) {
       }
     }
 
+    // 7. body_metrics (体組成推移: 体重・筋肉量・体脂肪率)
+    const bmSheet = ss.getSheetByName('body_metrics');
+    const bmData = bmSheet ? bmSheet.getDataRange().getValues() : [];
+    const bodyMetricsMap = {};
+    for (let i = 1; i < bmData.length; i++) {
+      const row = bmData[i];
+      const dKey = normalizeDateKeyGAS(row[0]);
+      if (!dKey) continue;
+      const wVal = row[1] !== '' && row[1] !== null && !isNaN(Number(row[1])) && Number(row[1]) > 0 ? Number(row[1]) : undefined;
+      const mVal = row[2] !== '' && row[2] !== null && !isNaN(Number(row[2])) && Number(row[2]) > 0 ? Number(row[2]) : undefined;
+      const fVal = row[3] !== '' && row[3] !== null && !isNaN(Number(row[3])) && Number(row[3]) > 0 ? Number(row[3]) : undefined;
+      if (wVal === undefined && mVal === undefined && fVal === undefined) continue;
+
+      bodyMetricsMap[dKey] = {
+        id: 'body-' + dKey,
+        date: dKey,
+        weightKg: wVal,
+        muscleMassKg: mVal,
+        bodyFatPct: fVal,
+        measuredAt: row[4] ? toIsoDateSafe(row[4]) : (dKey + 'T08:00:00.000+09:00'),
+        note: String(row[5] || '')
+      };
+    }
+    const bodyMetrics = Object.keys(bodyMetricsMap)
+      .map(function(k) { return bodyMetricsMap[k]; })
+      .sort(function(a, b) { return b.date.localeCompare(a.date); });
+
     const result = {
       status: 'success',
       exercises: exercises,
@@ -664,7 +722,8 @@ function doGet(e) {
       pastSessions: pastSessions,
       cardioTypes: cardioTypes,
       cardioLogs: cardioLogs,
-      profile: profile
+      profile: profile,
+      bodyMetrics: bodyMetrics
     };
 
     return ContentService.createTextOutput(JSON.stringify(result))
@@ -863,6 +922,99 @@ function doPost(e) {
         ctSheet.getRange(2, 1, rows.length, 3).setValues(rows);
       }
 
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 体組成ログ（体重・筋肉量・体脂肪率）の保存・更新
+    if (data.action === 'SAVE_BODY_METRICS') {
+      const incoming = Array.isArray(data.metrics) ? data.metrics : (data.metric ? [data.metric] : []);
+      let bmSheet = ss.getSheetByName('body_metrics');
+      if (!bmSheet) {
+        bmSheet = ss.insertSheet('body_metrics');
+        bmSheet.appendRow(['date', 'weight_kg', 'muscle_mass_kg', 'body_fat_pct', 'measured_at', 'note']);
+        bmSheet.getRange(1, 1, 1, 6).setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
+      }
+
+      const existingData = bmSheet.getDataRange().getValues();
+      const mapByDate = {};
+      for (let i = 1; i < existingData.length; i++) {
+        const r = existingData[i];
+        const dKey = normalizeDateKeyGAS(r[0]);
+        if (!dKey) continue;
+        mapByDate[dKey] = {
+          date: dKey,
+          weightKg: r[1] !== '' && r[1] !== null && !isNaN(Number(r[1])) && Number(r[1]) > 0 ? Number(r[1]) : '',
+          muscleMassKg: r[2] !== '' && r[2] !== null && !isNaN(Number(r[2])) && Number(r[2]) > 0 ? Number(r[2]) : '',
+          bodyFatPct: r[3] !== '' && r[3] !== null && !isNaN(Number(r[3])) && Number(r[3]) > 0 ? Number(r[3]) : '',
+          measuredAt: r[4] ? toIsoDateSafe(r[4]) : (dKey + 'T08:00:00.000+09:00'),
+          note: String(r[5] || '')
+        };
+      }
+
+      incoming.forEach(function(item) {
+        if (!item) return;
+        const dKey = normalizeDateKeyGAS(item.date || item.measuredAt);
+        if (!dKey) return;
+        const prev = mapByDate[dKey] || {};
+        mapByDate[dKey] = {
+          date: dKey,
+          weightKg: item.weightKg !== undefined && item.weightKg !== null && item.weightKg !== '' ? Number(item.weightKg) : (prev.weightKg !== undefined ? prev.weightKg : ''),
+          muscleMassKg: item.muscleMassKg !== undefined && item.muscleMassKg !== null && item.muscleMassKg !== '' ? Number(item.muscleMassKg) : (prev.muscleMassKg !== undefined ? prev.muscleMassKg : ''),
+          bodyFatPct: item.bodyFatPct !== undefined && item.bodyFatPct !== null && item.bodyFatPct !== '' ? Number(item.bodyFatPct) : (prev.bodyFatPct !== undefined ? prev.bodyFatPct : ''),
+          measuredAt: item.measuredAt || prev.measuredAt || new Date().toISOString(),
+          note: item.note !== undefined ? String(item.note) : (prev.note || '')
+        };
+      });
+
+      const sortedDates = Object.keys(mapByDate).sort(function(a, b) {
+        return b.localeCompare(a);
+      });
+      const outRows = sortedDates.map(function(k) {
+        const e = mapByDate[k];
+        return [e.date, e.weightKg, e.muscleMassKg, e.bodyFatPct, e.measuredAt, e.note];
+      });
+
+      const lastRow = bmSheet.getLastRow();
+      if (lastRow > 1) {
+        bmSheet.getRange(2, 1, lastRow - 1, 6).clearContent();
+      }
+      if (outRows.length > 0) {
+        bmSheet.getRange(2, 1, outRows.length, 6).setValues(outRows);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success', count: outRows.length }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 体組成ログの削除
+    if (data.action === 'DELETE_BODY_METRIC' && data.date) {
+      const targetDate = normalizeDateKeyGAS(data.date);
+      const bmSheet = ss.getSheetByName('body_metrics');
+      if (bmSheet && targetDate) {
+        const existingData = bmSheet.getDataRange().getValues();
+        const remaining = [];
+        for (let i = 1; i < existingData.length; i++) {
+          const dKey = normalizeDateKeyGAS(existingData[i][0]);
+          if (dKey && dKey !== targetDate) {
+            remaining.push([
+              dKey,
+              existingData[i][1],
+              existingData[i][2],
+              existingData[i][3],
+              existingData[i][4],
+              existingData[i][5]
+            ]);
+          }
+        }
+        const lastRow = bmSheet.getLastRow();
+        if (lastRow > 1) {
+          bmSheet.getRange(2, 1, lastRow - 1, 6).clearContent();
+        }
+        if (remaining.length > 0) {
+          bmSheet.getRange(2, 1, remaining.length, 6).setValues(remaining);
+        }
+      }
       return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
         .setMimeType(ContentService.MimeType.JSON);
     }

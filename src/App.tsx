@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { Navigation, TabType } from './components/Navigation';
-import { HomePage } from './pages/HomePage';
+import { BodyMetricsPage } from './pages/BodyMetricsPage';
 import { WorkoutPage } from './pages/WorkoutPage';
 import { CardioPage } from './pages/CardioPage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -17,11 +17,12 @@ import {
   Exercise, 
   AppSettings,
   CardioType,
-  CardioLog
+  CardioLog,
+  BodyMetricLog
 } from './types';
 
 export function App() {
-  const [currentTab, setCurrentTab] = useState<TabType>('home');
+  const [currentTab, setCurrentTab] = useState<TabType>('workout');
   const [activeSession, setActiveSession] = useState<WorkoutSession>(() =>
     StorageService.getOrCreateTodaySession()
   );
@@ -34,6 +35,7 @@ export function App() {
   const [pastSessions, setPastSessions] = useState<WorkoutSession[]>([]);
   const [cardioTypes, setCardioTypes] = useState<CardioType[]>([]);
   const [cardioLogs, setCardioLogs] = useState<CardioLog[]>([]);
+  const [bodyMetrics, setBodyMetrics] = useState<BodyMetricLog[]>([]);
   const [settings, setSettings] = useState<AppSettings>(StorageService.getSettings());
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -323,12 +325,66 @@ export function App() {
           shouldUploadProfile = true;
         }
 
+        // 5.8 体組成推移データ (bodyMetrics) の双方向同期
+        const remoteBodyMetrics: BodyMetricLog[] = Array.isArray(data.bodyMetrics) ? data.bodyMetrics : [];
+        const localBodyMetrics = StorageService.getBodyMetrics();
+        const remoteBodyByDate = new Map<string, BodyMetricLog>();
+        remoteBodyMetrics.forEach(bm => {
+          if (bm && bm.date) remoteBodyByDate.set(bm.date, bm);
+        });
+
+        const localToUploadBody: BodyMetricLog[] = [];
+        const mergedBodyMap = new Map<string, BodyMetricLog>();
+        remoteBodyMetrics.forEach(bm => {
+          if (bm && bm.date) mergedBodyMap.set(bm.date, bm);
+        });
+
+        localBodyMetrics.forEach(localBm => {
+          if (!localBm || !localBm.date) return;
+          const rem = remoteBodyByDate.get(localBm.date);
+          if (!rem) {
+            mergedBodyMap.set(localBm.date, localBm);
+            localToUploadBody.push(localBm);
+          } else {
+            const mergedItem: BodyMetricLog = {
+              id: `body-${localBm.date}`,
+              date: localBm.date,
+              weightKg: localBm.weightKg ?? rem.weightKg,
+              muscleMassKg: localBm.muscleMassKg ?? rem.muscleMassKg,
+              bodyFatPct: localBm.bodyFatPct ?? rem.bodyFatPct,
+              measuredAt: localBm.measuredAt || rem.measuredAt,
+              note: localBm.note ?? rem.note,
+            };
+            mergedBodyMap.set(localBm.date, mergedItem);
+            if (
+              (localBm.weightKg !== undefined && localBm.weightKg !== rem.weightKg) ||
+              (localBm.muscleMassKg !== undefined && localBm.muscleMassKg !== rem.muscleMassKg) ||
+              (localBm.bodyFatPct !== undefined && localBm.bodyFatPct !== rem.bodyFatPct)
+            ) {
+              localToUploadBody.push(mergedItem);
+            }
+          }
+        });
+
+        const mergedBodyMetrics = Array.from(mergedBodyMap.values()).sort((a, b) =>
+          b.date.localeCompare(a.date)
+        );
+        StorageService.saveBodyMetrics(mergedBodyMetrics);
+        setBodyMetrics(mergedBodyMetrics);
+
         // 6. ローカル未同期データの並列送信（ローカル保存完了後に実行し、alertで通信がブロックされる前に完了させる）
         const uploadPromises: Promise<any>[] = [];
         if (shouldUploadProfile) {
           uploadPromises.push(
             GasApiService.syncProfile(gasUrl, StorageService.getSettings().profile).catch(e =>
               console.error('身体データのGAS同期失敗:', e)
+            )
+          );
+        }
+        if (localToUploadBody.length > 0) {
+          uploadPromises.push(
+            GasApiService.syncBodyMetrics(gasUrl, localToUploadBody).catch(e =>
+              console.error('体組成データのGAS同期失敗:', e)
             )
           );
         }
@@ -374,7 +430,7 @@ export function App() {
 
         if (!silent) {
           alert(
-            `スプレッドシートとの同期が完了しました！\n・筋トレ履歴: ${mergedSessions.length}件\n・有酸素ログ: ${mergedCardio.length}件\n・メニュー: ${mergedMenus.length}件`
+            `スプレッドシートとの同期が完了しました！\n・筋トレ履歴: ${mergedSessions.length}件\n・有酸素ログ: ${mergedCardio.length}件\n・体組成ログ: ${mergedBodyMetrics.length}件\n・メニュー: ${mergedMenus.length}件`
           );
         }
       }
@@ -391,18 +447,32 @@ export function App() {
 
   // 初回データ読み込み ＆ 自動同期
   useEffect(() => {
-    // URLに ?weight=XX.X が付与されている場合は自動反映
-    const syncedWeight = StorageService.checkUrlWeightParam();
+    // URLに ?weight=XX.X&muscle=YY.Y&fat=ZZ.Z 等が付与されている場合は自動反映
+    const syncedBody = StorageService.checkUrlBodyMetricsParam();
     const currentSettings = StorageService.getSettings();
     setSettings(currentSettings);
+    setBodyMetrics(StorageService.getBodyMetrics());
 
-    if (syncedWeight) {
+    if (syncedBody) {
+      // ヘルスケアからの共有時は「体組成」タブを即座に表示
+      setCurrentTab('body');
+
       if (currentSettings.gasWebAppUrl) {
+        GasApiService.syncBodyMetrics(currentSettings.gasWebAppUrl, syncedBody.syncedLogs).catch(e =>
+          console.error('体組成取得後のGAS同期失敗:', e)
+        );
         GasApiService.syncProfile(currentSettings.gasWebAppUrl, currentSettings.profile).catch(e =>
-          console.error('体重取得後のGAS同期失敗:', e)
+          console.error('プロフィール体重のGAS同期失敗:', e)
         );
       }
-      alert(`Appleヘルスケアから最新体重 (${syncedWeight} kg) を取得・反映しました！`);
+
+      const latest = syncedBody.latestLog;
+      const details: string[] = [];
+      if (latest.weightKg !== undefined) details.push(`体重: ${latest.weightKg} kg`);
+      if (latest.muscleMassKg !== undefined) details.push(`筋肉量: ${latest.muscleMassKg} kg`);
+      if (latest.bodyFatPct !== undefined) details.push(`体脂肪率: ${latest.bodyFatPct} %`);
+      const countNote = syncedBody.syncedLogs.length > 1 ? `（計 ${syncedBody.syncedLogs.length} 日分）` : '';
+      alert(`Appleヘルスケアから体組成データを取得・反映しました！${countNote}\n${details.join(' / ')}`);
     }
 
     const initialSessions = StorageService.getPastSessions();
@@ -436,21 +506,6 @@ export function App() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
-
-  // ルーティンメニューを今日のシートに読み込む / 筋トレタブへ遷移
-  const handleStartSession = (menuId?: string) => {
-    if (menuId) {
-      const currentSession = StorageService.getOrCreateTodaySession();
-      const hasAlreadyStartedToday =
-        currentSession.exercises.length > 0 ||
-        (currentSession.excludedExerciseIds && currentSession.excludedExerciseIds.length > 0);
-      // まだ本日の種目が未ロードの場合のみメニューを初期展開する（削除した種目が再ロードで復活するのを防止）
-      if (!hasAlreadyStartedToday) {
-        handleLoadMenuIntoToday(menuId);
-      }
-    }
-    setCurrentTab('workout');
-  };
 
   // 指定したメニューの種目を本日のワークアウトシートへ追加（すでに存在する種目・本日削除した種目は重複追加しない）
   const handleLoadMenuIntoToday = (menuId: string) => {
@@ -629,6 +684,18 @@ export function App() {
     }
   };
 
+  // 体組成ログ削除
+  const handleDeleteBodyMetric = (date: string) => {
+    StorageService.deleteBodyMetric(date);
+    setBodyMetrics(StorageService.getBodyMetrics());
+    const gasUrl = StorageService.getSettings().gasWebAppUrl;
+    if (gasUrl) {
+      GasApiService.deleteBodyMetric(gasUrl, date).catch(err =>
+        console.error('GASへの体組成ログ削除同期に失敗:', err)
+      );
+    }
+  };
+
   const hasTodayExercises = activeSession.exercises.length > 0;
 
   return (
@@ -640,18 +707,11 @@ export function App() {
       />
 
       <main className="flex-1">
-        {currentTab === 'home' && (
-          <HomePage
-            schedule={schedule}
-            routineMenus={routineMenus}
-            bodyParts={bodyParts}
-            pastSessions={pastSessions}
-            cardioLogs={cardioLogs}
-            onStartSession={handleStartSession}
-            onNavigateToWorkout={() => setCurrentTab('workout')}
-            hasActiveSession={hasTodayExercises}
-            onNavigateToCardio={() => setCurrentTab('cardio')}
-            onNavigateToSettings={() => setCurrentTab('settings')}
+        {currentTab === 'body' && (
+          <BodyMetricsPage
+            bodyMetrics={bodyMetrics}
+            userProfile={settings.profile}
+            onDeleteMetric={handleDeleteBodyMetric}
           />
         )}
 
@@ -663,6 +723,7 @@ export function App() {
             exercises={exercises}
             bodyParts={bodyParts}
             routineMenus={routineMenus}
+            schedule={schedule}
             onLoadMenu={handleLoadMenuIntoToday}
             onCreateExercise={handleAddExercise}
           />
@@ -728,6 +789,7 @@ export function App() {
         currentTab={currentTab}
         onChangeTab={(tab) => {
           setSettings(StorageService.getSettings());
+          setBodyMetrics(StorageService.getBodyMetrics());
           setCurrentTab(tab);
         }}
         hasActiveWorkout={hasTodayExercises}

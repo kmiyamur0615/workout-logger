@@ -1,4 +1,4 @@
-import { WorkoutSession, CardioLog, CardioType, Exercise, WeekdaySchedule, RoutineMenu, UserProfile } from '../types';
+import { WorkoutSession, CardioLog, CardioType, Exercise, WeekdaySchedule, RoutineMenu, UserProfile, BodyMetricLog } from '../types';
 
 export const GasApiService = {
   // スプレッドシートからマスタ・履歴取得 (doGet)
@@ -234,5 +234,55 @@ export const GasApiService = {
       console.error('GAS有酸素種別マスタ同期エラー:', err);
       return false;
     }
-  }
+  },
+
+  // 体組成ログ（体重・筋肉量・体脂肪率）の一括送信・更新
+  async syncBodyMetrics(gasUrl: string, metrics: BodyMetricLog[]): Promise<boolean> {
+    if (!gasUrl || !Array.isArray(metrics) || metrics.length === 0) return false;
+
+    try {
+      const payload = {
+        action: 'SAVE_BODY_METRICS',
+        metrics,
+      };
+
+      const response = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) return false;
+      const resJson = await response.json();
+      return resJson.status === 'success';
+    } catch (err) {
+      console.error('GAS体組成ログ同期エラー:', err);
+      return false;
+    }
+  },
+
+  // 体組成ログの削除同期
+  async deleteBodyMetric(gasUrl: string, date: string): Promise<boolean> {
+    if (!gasUrl || !date) return false;
+
+    try {
+      const payload = {
+        action: 'DELETE_BODY_METRIC',
+        date,
+      };
+
+      const response = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) return false;
+      const resJson = await response.json();
+      return resJson.status === 'success';
+    } catch (err) {
+      console.error('GAS体組成ログ削除同期エラー:', err);
+      return false;
+    }
+  },
 };
